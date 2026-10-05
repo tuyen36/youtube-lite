@@ -176,6 +176,10 @@ public class HomeActivity extends AppCompatActivity {
             TextView duration = row.findViewById(R.id.video_duration);
             title.setText(item.title != null ? item.title : "");
             String m = item.uploader != null ? item.uploader : "";
+            if (item.uploadDate != null && !item.uploadDate.isEmpty()) {
+                if (!m.isEmpty()) m += " • ";
+                m += item.uploadDate;
+            }
             meta.setText(m);
             meta.setVisibility(m.isEmpty() ? View.GONE : View.VISIBLE);
             String dur = item.durationLabel();

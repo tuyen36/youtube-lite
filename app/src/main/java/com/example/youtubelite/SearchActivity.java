@@ -290,7 +290,15 @@ public class SearchActivity extends AppCompatActivity {
         } catch (Exception ignored) {
             uploader = "";
         }
-        return new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader);
+        // Ngày đăng (vd "3 ngày trước", "1 tháng trước").
+        String uploadDate = "";
+        try {
+            String t = s.getTextualUploadDate();
+            if (t != null) uploadDate = t;
+        } catch (Exception ignored) {
+            uploadDate = "";
+        }
+        return new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader, uploadDate);
     }
 
     private static List<VideoItem> itemsFromInfo(
@@ -342,7 +350,7 @@ public class SearchActivity extends AppCompatActivity {
         return new QualityPolicy.Stream(vs.getContent(), height, fps, codec, progressive);
     }
 
-    /** 1 kết quả video: id + thumbnail + độ dài + kênh + stream (lấy sau khi bấm). */
+    /** 1 kết quả video: id + thumbnail + độ dài + kênh + ngày đăng + stream (lấy sau khi bấm). */
     public static class VideoItem {
         public final String videoId;
         public final String title;
@@ -350,19 +358,26 @@ public class SearchActivity extends AppCompatActivity {
         public String thumbUrl;
         public long durationSec;
         public String uploader;
+        public String uploadDate; // vd "3 ngày trước", "1 tháng trước"
 
         public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams) {
-            this(videoId, title, streams, "", -1, "");
+            this(videoId, title, streams, "", -1, "", "");
         }
 
         public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams,
                          String thumbUrl, long durationSec, String uploader) {
+            this(videoId, title, streams, thumbUrl, durationSec, uploader, "");
+        }
+
+        public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams,
+                         String thumbUrl, long durationSec, String uploader, String uploadDate) {
             this.videoId = videoId;
             this.title = title;
             this.streams = streams;
             this.thumbUrl = thumbUrl != null ? thumbUrl : "";
             this.durationSec = durationSec;
             this.uploader = uploader != null ? uploader : "";
+            this.uploadDate = uploadDate != null ? uploadDate : "";
         }
 
         public String durationLabel() {

@@ -64,6 +64,11 @@ public class VideoAdapter extends BaseAdapter {
         h.title.setText(item.title != null ? item.title : "");
         String meta = "";
         if (item.uploader != null && !item.uploader.isEmpty()) meta += item.uploader;
+        // Ngày đăng: "kênh • 3 ngày trước" (giống YouTube).
+        if (item.uploadDate != null && !item.uploadDate.isEmpty()) {
+            if (!meta.isEmpty()) meta += " • ";
+            meta += item.uploadDate;
+        }
         h.meta.setText(meta);
         h.meta.setVisibility(meta.isEmpty() ? View.GONE : View.VISIBLE);
         String dur = item.durationLabel();

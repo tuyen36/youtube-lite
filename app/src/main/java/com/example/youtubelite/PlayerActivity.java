@@ -81,6 +81,8 @@ public class PlayerActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
+        // Giữ màn hình luôn sáng khi đang phát (không tắt màn hình giữa chừng).
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         playerView = findViewById(R.id.player_view);
         ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
         titleView = findViewById(R.id.player_title);
@@ -277,6 +279,10 @@ public class PlayerActivity extends AppCompatActivity {
             android.widget.TextView duration = row.findViewById(R.id.video_duration);
             title.setText(item.title != null ? item.title : "");
             String m = item.uploader != null ? item.uploader : "";
+            if (item.uploadDate != null && !item.uploadDate.isEmpty()) {
+                if (!m.isEmpty()) m += " • ";
+                m += item.uploadDate;
+            }
             meta.setText(m);
             meta.setVisibility(m.isEmpty() ? View.GONE : View.VISIBLE);
             String dur = item.durationLabel();
@@ -425,7 +431,9 @@ public class PlayerActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** Full màn hình lấp đầy: resize FILL + khung video match_parent khi ngang. */
+    /** Full màn hình ĐÚNG TỈ LỆ video: xoay ngang + FIT (không kéo giãn ngang).
+     * Bản cũ dùng FILL nên video bị bè ngang. FIT giữ đúng 16:9/4:3, viền đen
+     * còn lại là chuẩn (giống YouTube), không méo hình. */
     private void toggleFullscreen() {
         fullscreen = !fullscreen;
         long pos = player != null ? player.getCurrentPosition() : 0;
@@ -439,7 +447,8 @@ public class PlayerActivity extends AppCompatActivity {
             playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            // Lấp đầy: khung video match_parent + PlayerView FILL (cắt viền đen 2 bên).
+            // ĐÚNG TỈ LỆ: khung video match_parent + PlayerView FIT (giữ 16:9/4:3,
+            // không bè ngang như FILL). Viền đen còn lại là chuẩn YouTube.
             if (frame != null) {
                 android.view.ViewGroup.LayoutParams lp = frame.getLayoutParams();
                 lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
@@ -448,7 +457,7 @@ public class PlayerActivity extends AppCompatActivity {
             android.view.ViewGroup.LayoutParams vpl = playerView.getLayoutParams();
             vpl.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
             playerView.setLayoutParams(vpl);
-            playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL);
+            playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
             if (scroll != null) scroll.setVisibility(View.GONE);
         } else {
             if (getSupportActionBar() != null) getSupportActionBar().show();

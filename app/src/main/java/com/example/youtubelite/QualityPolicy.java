@@ -1,6 +1,8 @@
 package com.example.youtubelite;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -35,7 +37,8 @@ public final class QualityPolicy {
         }
     }
 
-    /** Lọc bỏ >1080p và >30fps, sắp xếp: progressive trước, H.264 trước, cao->thấp. */
+    /** Lọc bỏ >1080p và >30fps, sắp xếp: progressive trước, H.264 trước, cao->thấp.
+     * Dùng Collections.sort (API 21 OK). KHÔNG dùng List.sort vì cần API 24+. */
     public static List<Stream> filter(List<Stream> input) {
         List<Stream> ok = new ArrayList<>();
         for (Stream s : input) {
@@ -43,11 +46,14 @@ public final class QualityPolicy {
             if (s.fps > MAX_FPS) continue; // tắt 60fps ở đây
             ok.add(s);
         }
-        ok.sort((a, b) -> {
-            if (a.isProgressive != b.isProgressive) return a.isProgressive ? -1 : 1;
-            int ca = codecRank(a.codec), cb = codecRank(b.codec);
-            if (ca != cb) return Integer.compare(ca, cb);
-            return Integer.compare(b.height, a.height);
+        Collections.sort(ok, new Comparator<Stream>() {
+            @Override
+            public int compare(Stream a, Stream b) {
+                if (a.isProgressive != b.isProgressive) return a.isProgressive ? -1 : 1;
+                int ca = codecRank(a.codec), cb = codecRank(b.codec);
+                if (ca != cb) return Integer.compare(ca, cb);
+                return Integer.compare(b.height, a.height);
+            }
         });
         return ok;
     }
