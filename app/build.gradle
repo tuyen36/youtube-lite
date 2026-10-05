@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace "com.example.youtubelite"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.youtubelite"
+        // May phu cu: ho tro tu Android 5.0 (Lollipop, API 21)
+        minSdk 21
+        targetSdk 34
+        versionCode 2
+        versionName "1.1"
+
+        // Asus FonePad 8 K016 dùng chip Intel Atom Z3560 (x86), không phải ARM:
+        // phải build cả x86 lẫn armeabi-v7a thì máy Intel mới mở được app.
+        // (Bản cũ chỉ có armeabi-v7a nên cài xong bấm vào là văng ngay.)
+        ndk {
+            abiFilters "armeabi-v7a", "x86"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        // K016 chạy Android 5.0 (API 21): phải giữ Java 8 + desugar thì máy cũ mới mở được.
+        // (Bản cũ để Java 17 không desugar nên cài xong bấm vào là văng ngay.)
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
+    }
+}
+
+dependencies {
+    // ExoPlayer (Media3) 1.4.1 - ban cuoi con ho tro minSdk 21 on dinh.
+    def media3Version = "1.4.1"
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
+    implementation "androidx.media3:media3-ui:$media3Version"
+    implementation "androidx.media3:media3-datasource-okhttp:$media3Version"
+
+    // NewPipeExtractor - lay link stream YouTube khong can API key.
+    // v0.26.5 (08/2026): sua loi "Got HTML document, expected JSON" do YouTube doi API.
+    implementation "com.github.TeamNewPipe:NewPipeExtractor:v0.26.5"
+
+    implementation "com.squareup.okhttp3:okhttp:3.14.9"
+    // Desugar để Java 8 API (Optional, Stream...) chạy được trên Android 5.0.
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation "com.google.android.material:material:1.11.0"
+    implementation "androidx.constraintlayout:constraintlayout:2.1.4"
+    implementation "androidx.recyclerview:recyclerview:1.3.2"
+    implementation "com.github.bumptech.glide:glide:4.16.0"
+}

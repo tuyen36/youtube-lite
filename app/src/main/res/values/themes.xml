@@ -1,0 +1,8 @@
+<resources>
+    <!-- Theme tối giản cho máy cũ, tương thích API 21+ (AppCompat). -->
+    <style name="Theme.YoutubeLite" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <item name="colorPrimary">#CC0000</item>
+        <item name="colorPrimaryDark">#990000</item>
+        <item name="colorAccent">#CC0000</item>
+    </style>
+</resources>
