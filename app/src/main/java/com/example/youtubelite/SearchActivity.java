@@ -38,17 +38,39 @@ public class SearchActivity extends AppCompatActivity {
         resultList.setAdapter(adapter);
         resultList.setOnItemClickListener((parent, view, position, id) -> {
             VideoItem item = items.get(position);
-            // Lọc qua QualityPolicy trước khi phát: trần 1080p, tắt 60fps.
-            List<QualityPolicy.Stream> ok = QualityPolicy.filter(item.streams);
-            QualityPolicy.Stream pick = QualityPolicy.pickDefault(ok);
-            if (pick == null) {
-                Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Intent i = new Intent(this, PlayerActivity.class);
-            i.putExtra(PlayerActivity.EXTRA_VIDEO_URL, pick.url);
-            i.putExtra(PlayerActivity.EXTRA_VIDEO_HEIGHT, pick.height);
-            startActivity(i);
+            // Bấm vào mới lấy StreamInfo + lọc 1080p/30fps (chạy nền để không treo UI).
+            Toast.makeText(this, "Đang lấy link phát...", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                try {
+                    NewPipeHolder.initIfNeeded();
+                    org.schabi.newpipe.extractor.StreamingService yt2 =
+                            org.schabi.newpipe.extractor.NewPipe.getService(0);
+                    org.schabi.newpipe.extractor.stream.StreamInfo detail =
+                            org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(yt2, item.videoId);
+                    List<QualityPolicy.Stream> raw = new ArrayList<>();
+                    for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
+                        raw.add(mapVideoStream(vs));
+                    }
+                    for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoOnlyStreams()) {
+                        raw.add(mapVideoStream(vs));
+                    }
+                    List<QualityPolicy.Stream> ok = QualityPolicy.filter(raw);
+                    QualityPolicy.Stream pick = QualityPolicy.pickDefault(ok);
+                    runOnUiThread(() -> {
+                        if (pick == null) {
+                            Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Intent i = new Intent(this, PlayerActivity.class);
+                        i.putExtra(PlayerActivity.EXTRA_VIDEO_URL, pick.url);
+                        i.putExtra(PlayerActivity.EXTRA_VIDEO_HEIGHT, pick.height);
+                        startActivity(i);
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> Toast.makeText(this,
+                            "Không lấy được link phát: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                }
+            }).start();
         });
 
         searchBtn.setOnClickListener(v -> doSearch(queryInput.getText().toString().trim()));
@@ -79,25 +101,10 @@ public class SearchActivity extends AppCompatActivity {
                             (org.schabi.newpipe.extractor.stream.StreamInfoItem) it;
                     String url = s.getUrl();
                     String title = s.getName() != null ? s.getName() : url;
-                    // Lấy stream chi tiết để lọc 1080p/30fps.
-                    List<QualityPolicy.Stream> raw = new ArrayList<>();
-                    try {
-                        org.schabi.newpipe.extractor.stream.StreamInfo detail =
-                                org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(yt, url);
-                        for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
-                            raw.add(mapVideoStream(vs));
-                        }
-                        for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoOnlyStreams()) {
-                            raw.add(mapVideoStream(vs));
-                        }
-                    } catch (Exception e) {
-                        // Không lấy được stream chi tiết thì bỏ qua video này.
-                        continue;
-                    }
-                    List<QualityPolicy.Stream> ok = QualityPolicy.filter(raw);
-                    if (ok.isEmpty()) continue; // toàn 4K/60fps -> bỏ
-                    found.add(new VideoItem(url, title, ok));
-                    foundTitles.add(title + " [" + ok.get(0).label() + "+]");
+                    // Hiện kết quả NGAY, chưa lấy stream chi tiết (nhanh + không trống list).
+                    // Bấm vào mới lấy StreamInfo + lọc 1080p/30fps (xem onItemClick).
+                    found.add(new VideoItem(url, title, new ArrayList<>()));
+                    foundTitles.add(title);
                     if (found.size() >= 25) break; // máy cũ: tối đa 25 kết quả
                 }
                 runOnUiThread(() -> {
@@ -122,11 +129,13 @@ public class SearchActivity extends AppCompatActivity {
             org.schabi.newpipe.extractor.stream.VideoStream vs) {
         int height = 0;
         try {
-            String res = vs.getResolution() != null ? vs.getResolution() : "";
-            String digits = res.replaceAll("[^0-9]", "");
-            // "720p" -> 720, "1080p60" -> 108060 -> lấy 4 số đầu = 1080
-            if (digits.length() > 4) digits = digits.substring(0, 4);
-            height = digits.isEmpty() ? 0 : Integer.parseInt(digits);
+            height = vs.getHeight(); // API thật: int, không parse chuỗi
+            if (height <= 0) {
+                String res = vs.getResolution() != null ? vs.getResolution() : "";
+                java.util.regex.Matcher m =
+                        java.util.regex.Pattern.compile("(\\d{3,4})\\s*p").matcher(res);
+                if (m.find()) height = Integer.parseInt(m.group(1));
+            }
         } catch (Exception ignored) {
             height = 0;
         }

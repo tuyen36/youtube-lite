@@ -47,7 +47,8 @@ dependencies {
     implementation "androidx.media3:media3-datasource-okhttp:$media3Version"
 
     // NewPipeExtractor - lay link stream YouTube khong can API key.
-    implementation "com.github.TeamNewPipe:NewPipeExtractor:v0.24.5"
+    // v0.26.5 (08/2026): sua loi "Got HTML document, expected JSON" do YouTube doi API.
+    implementation "com.github.TeamNewPipe:NewPipeExtractor:v0.26.5"
 
     implementation "com.squareup.okhttp3:okhttp:3.14.9"
     implementation "androidx.appcompat:appcompat:1.6.1"
