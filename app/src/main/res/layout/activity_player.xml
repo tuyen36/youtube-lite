@@ -1,41 +1,120 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000">
+    android:orientation="vertical"
+    android:background="#111">
 
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/player_view"
+    <!-- Phần trên: video đang phát (dọc: cao 16:9, ngang: full màn hình) -->
+    <FrameLayout
+        android:id="@+id/player_frame"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:show_buffering="when_playing"
-        app:show_shuffle_button="false" />
-
-    <!-- Nút chọn độ phân giải + full màn hình (góc phải, tương thích API 21) -->
-    <LinearLayout
-        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="8dp"
-        android:orientation="horizontal">
+        android:background="#000">
 
-        <ImageButton
-            android:id="@+id/quality_btn"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="#80000000"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:contentDescription="Độ phân giải" />
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/player_view"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            app:show_buffering="when_playing"
+            app:show_shuffle_button="false" />
 
-        <ImageButton
-            android:id="@+id/fullscreen_btn"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginLeft="8dp"
-            android:background="#80000000"
-            android:src="@android:drawable/ic_menu_crop"
-            android:contentDescription="Toàn màn hình" />
-    </LinearLayout>
+        <!-- Nút chọn độ phân giải + full màn hình (góc phải, tương thích API 21) -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:orientation="horizontal">
 
-</FrameLayout>
+            <ImageButton
+                android:id="@+id/quality_btn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="#80000000"
+                android:src="@android:drawable/ic_menu_preferences"
+                android:contentDescription="Độ phân giải" />
+
+            <ImageButton
+                android:id="@+id/fullscreen_btn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginLeft="8dp"
+                android:background="#80000000"
+                android:src="@android:drawable/ic_menu_crop"
+                android:contentDescription="Toàn màn hình" />
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Phần dưới: tiêu đề video + kênh + lượt xem, rồi list liên quan -->
+    <ScrollView
+        android:id="@+id/player_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/player_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:maxLines="3"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/player_meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#AAA"
+                android:textSize="12sp"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/player_related_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Video liên quan"
+                android:textColor="#FFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/player_related_state"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#888"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/player_related_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/player_related_more_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Xem thêm video liên quan"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

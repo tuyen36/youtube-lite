@@ -4,8 +4,14 @@ import android.app.AlertDialog;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -21,13 +27,19 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.datasource.DefaultHttpDataSource;
 
+import com.bumptech.glide.Glide;
+
 import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Màn hình phát video cho máy cũ:
+ * Màn hình phát video cho máy cũ (giống ảnh mẫu của user):
+ * - Phần trên: video đang phát (dọc: 16:9, ngang: full màn hình).
+ * - Phần dưới: tiêu đề + kênh + lượt xem/ngày đăng, rồi list video liên quan
+ *   (thumbnail + tiêu đề + kênh + độ dài). Bấm video liên quan -> phát ngay
+ *   trong cùng màn hình (giữ nguyên vị trí scroll, không mở activity mới).
  * - Có tiếng: progressive phát trực tiếp; videoOnly thì ghép audio rời.
- * - Chọn độ phân giải trong menu bánh răng (chỉ các mức <=1080p/30fps).
- * - Nút phóng to toàn màn hình (xoay ngang + ẩn action bar).
+ * - Chọn độ phân giải trong nút bánh răng (chỉ các mức <=1080p/30fps).
  * - Buffer nhỏ 5-15s, RAM 1GB không tràn.
  */
 public class PlayerActivity extends AppCompatActivity {
@@ -51,12 +63,27 @@ public class PlayerActivity extends AppCompatActivity {
     private String audioUrl;
     private int currentIndex = 0;
 
+    private TextView titleView;
+    private TextView metaView;
+    private TextView relatedState;
+    private LinearLayout relatedContainer;
+    private Button relatedMoreBtn;
+    private final List<SearchActivity.VideoItem> relatedFull = new ArrayList<>();
+    private int relatedShown = 10;
+    private static final int RELATED_PAGE = 10;
+    private String pageUrl;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
         playerView = findViewById(R.id.player_view);
         ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
+        titleView = findViewById(R.id.player_title);
+        metaView = findViewById(R.id.player_meta);
+        relatedState = findViewById(R.id.player_related_state);
+        relatedContainer = findViewById(R.id.player_related_container);
+        relatedMoreBtn = findViewById(R.id.player_related_more_btn);
 
         String url = getIntent().getStringExtra(EXTRA_VIDEO_URL);
         int height = getIntent().getIntExtra(EXTRA_VIDEO_HEIGHT, 480);
@@ -70,17 +97,24 @@ public class PlayerActivity extends AppCompatActivity {
         if (getIntent().getStringArrayListExtra(EXTRA_ALL_AUDIOS) != null) {
             allAudios = getIntent().getStringArrayListExtra(EXTRA_ALL_AUDIOS);
         }
+        pageUrl = getIntent().getStringExtra("video_page_url");
+        String vTitle = getIntent().getStringExtra(EXTRA_VIDEO_TITLE);
+        String vUploader = getIntent().getStringExtra(EXTRA_VIDEO_UPLOADER);
         // Ghi lịch sử xem (để màn hình chính gợi ý video tương tự lần sau).
         try {
-            String pageUrl = getIntent().getStringExtra("video_page_url");
             WatchHistory.push(this,
                     pageUrl != null ? pageUrl : url,
-                    getIntent().getStringExtra(EXTRA_VIDEO_TITLE),
+                    vTitle,
                     getIntent().getStringExtra(EXTRA_VIDEO_THUMB),
                     getIntent().getLongExtra(EXTRA_VIDEO_DURATION, -1),
-                    getIntent().getStringExtra(EXTRA_VIDEO_UPLOADER));
+                    vUploader);
         } catch (Exception ignored) {
         }
+        // Hiện tiêu đề + kênh ngay (giống ảnh mẫu: tiêu đề 2-3 dòng + kênh • view • time).
+        titleView.setText(vTitle != null && !vTitle.isEmpty() ? vTitle : "Đang phát...");
+        String meta0 = vUploader != null && !vUploader.isEmpty() ? vUploader : "";
+        metaView.setText(meta0);
+        metaView.setVisibility(meta0.isEmpty() ? View.GONE : View.VISIBLE);
         if (url == null) {
             finish();
             return;
@@ -113,11 +147,212 @@ public class PlayerActivity extends AppCompatActivity {
         player.prepare();
         player.play();
 
-        // Nút bánh răng của PlayerView: chen thêm chọn chất lượng + full màn hình
-        // bằng nút riêng góc phải (đơn giản, tương thích API 21).
+        // Nút bánh răng: chọn chất lượng + full màn hình (góc phải, API 21).
         fullBtn.setOnClickListener(v -> toggleFullscreen());
         ImageButton qualityBtn = findViewById(R.id.quality_btn);
         qualityBtn.setOnClickListener(v -> showQualityDialog());
+
+        relatedMoreBtn.setOnClickListener(v -> {
+            relatedShown += RELATED_PAGE;
+            renderRelated();
+        });
+        // Tải video liên quan của video đang xem.
+        loadRelated(pageUrl != null ? pageUrl : url);
+    }
+
+    /** Tải video liên quan (related của StreamInfo) cho video đang phát. */
+    private void loadRelated(@Nullable String videoPageUrl) {
+        if (videoPageUrl == null || videoPageUrl.isEmpty()) {
+            relatedState.setText("Không lấy được video liên quan");
+            relatedState.setVisibility(View.VISIBLE);
+            return;
+        }
+        relatedState.setText("Đang tải video liên quan...");
+        relatedState.setVisibility(View.VISIBLE);
+        new Thread(() -> {
+            try {
+                NewPipeHolder.initIfNeeded();
+                org.schabi.newpipe.extractor.StreamingService yt =
+                        org.schabi.newpipe.extractor.NewPipe.getService(0);
+                org.schabi.newpipe.extractor.stream.StreamInfo detail =
+                        org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(yt, videoPageUrl);
+                List<SearchActivity.VideoItem> got = new ArrayList<>();
+                // Cập nhật meta: lượt xem + ngày đăng nếu có (giống ảnh mẫu).
+                String viewsLine = "";
+                try {
+                    String up = detail.getUploaderName();
+                    long views = detail.getViewCount();
+                    String date = detail.getTextualUploadDate();
+                    StringBuilder sb = new StringBuilder();
+                    if (up != null && !up.isEmpty()) sb.append(up);
+                    if (views >= 0) {
+                        if (sb.length() > 0) sb.append(" • ");
+                        sb.append(formatViews(views)).append(" lượt xem");
+                    }
+                    if (date != null && !date.isEmpty()) {
+                        if (sb.length() > 0) sb.append(" • ");
+                        sb.append(date);
+                    }
+                    viewsLine = sb.toString();
+                } catch (Exception ignored) {
+                }
+                final String metaLine = viewsLine;
+                if (detail.getRelatedItems() != null) {
+                    for (org.schabi.newpipe.extractor.InfoItem it : detail.getRelatedItems()) {
+                        if (!(it instanceof org.schabi.newpipe.extractor.stream.StreamInfoItem)) continue;
+                        org.schabi.newpipe.extractor.stream.StreamInfoItem s =
+                                (org.schabi.newpipe.extractor.stream.StreamInfoItem) it;
+                        got.add(SearchActivity.itemFromStreamItem(s));
+                        if (got.size() >= 30) break;
+                    }
+                }
+                runOnUiThread(() -> {
+                    if (!metaLine.isEmpty()) {
+                        metaView.setText(metaLine);
+                        metaView.setVisibility(View.VISIBLE);
+                    }
+                    relatedFull.clear();
+                    relatedFull.addAll(got);
+                    relatedShown = RELATED_PAGE;
+                    renderRelated();
+                    if (got.isEmpty()) {
+                        relatedState.setText("Không có video liên quan");
+                        relatedState.setVisibility(View.VISIBLE);
+                    } else {
+                        relatedState.setVisibility(View.GONE);
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    relatedState.setText("Không tải được video liên quan: " + e.getMessage());
+                    relatedState.setVisibility(View.VISIBLE);
+                });
+            }
+        }).start();
+    }
+
+    private static String formatViews(long views) {
+        if (views >= 1_000_000_000) return String.format("%.1f T", views / 1_000_000_000.0);
+        if (views >= 1_000_000) return String.format("%.1f Tr", views / 1_000_000.0);
+        if (views >= 1_000) return String.format("%.1f N", views / 1_000.0);
+        return String.valueOf(views);
+    }
+
+    private void renderRelated() {
+        relatedContainer.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
+        int n = Math.min(relatedShown, relatedFull.size());
+        for (int i = 0; i < n; i++) {
+            SearchActivity.VideoItem item = relatedFull.get(i);
+            View row = inflater.inflate(R.layout.item_video, relatedContainer, false);
+            ImageView thumb = row.findViewById(R.id.video_thumb);
+            android.widget.TextView title = row.findViewById(R.id.video_title);
+            android.widget.TextView meta = row.findViewById(R.id.video_meta);
+            android.widget.TextView duration = row.findViewById(R.id.video_duration);
+            title.setText(item.title != null ? item.title : "");
+            String m = item.uploader != null ? item.uploader : "";
+            meta.setText(m);
+            meta.setVisibility(m.isEmpty() ? View.GONE : View.VISIBLE);
+            String dur = item.durationLabel();
+            duration.setText(dur);
+            duration.setVisibility(dur.isEmpty() ? View.GONE : View.VISIBLE);
+            if (item.thumbUrl != null && !item.thumbUrl.isEmpty()) {
+                Glide.with(this).load(item.thumbUrl).centerCrop().into(thumb);
+            } else {
+                thumb.setImageResource(android.R.color.darker_gray);
+            }
+            row.setOnClickListener(v -> switchToRelated(item));
+            relatedContainer.addView(row);
+        }
+        relatedMoreBtn.setVisibility(
+                relatedShown < relatedFull.size() ? View.VISIBLE : View.GONE);
+    }
+
+    /** Bấm video liên quan -> phát ngay trong cùng màn hình (không mở activity mới). */
+    private void switchToRelated(SearchActivity.VideoItem item) {
+        Toast.makeText(this, "Đang lấy link phát...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                NewPipeHolder.initIfNeeded();
+                org.schabi.newpipe.extractor.StreamingService yt2 =
+                        org.schabi.newpipe.extractor.NewPipe.getService(0);
+                org.schabi.newpipe.extractor.stream.StreamInfo detail =
+                        org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(yt2, item.videoId);
+                String bestAudio = null;
+                try {
+                    if (detail.getAudioStreams() != null && !detail.getAudioStreams().isEmpty()) {
+                        bestAudio = detail.getAudioStreams().get(0).getContent();
+                    }
+                } catch (Exception ignored) {
+                    bestAudio = null;
+                }
+                List<QualityPolicy.Stream> rawProg = new ArrayList<>();
+                for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
+                    rawProg.add(SearchActivity.mapVideoStream(vs));
+                }
+                List<QualityPolicy.Stream> prog = QualityPolicy.filter(rawProg);
+                List<QualityPolicy.Stream> rawOnly = new ArrayList<>();
+                for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoOnlyStreams()) {
+                    rawOnly.add(SearchActivity.mapVideoStream(vs));
+                }
+                List<QualityPolicy.Stream> only = QualityPolicy.filter(rawOnly);
+                ArrayList<String> urls = new ArrayList<>();
+                ArrayList<String> labels = new ArrayList<>();
+                ArrayList<String> audios = new ArrayList<>();
+                java.util.Set<Integer> seen = new java.util.HashSet<>();
+                for (QualityPolicy.Stream s : prog) {
+                    if (seen.contains(s.height)) continue;
+                    seen.add(s.height);
+                    urls.add(s.url);
+                    labels.add(s.label() + " \u266A");
+                    audios.add(null);
+                }
+                for (QualityPolicy.Stream s : only) {
+                    if (seen.contains(s.height)) continue;
+                    seen.add(s.height);
+                    urls.add(s.url);
+                    labels.add(s.label());
+                    audios.add(bestAudio);
+                }
+                runOnUiThread(() -> {
+                    if (urls.isEmpty()) {
+                        Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    int defIdx = 0;
+                    for (int k = 0; k < labels.size(); k++) {
+                        if (labels.get(k).startsWith("480p")) { defIdx = k; break; }
+                    }
+                    // Đổi video ngay trong màn hình này: tiêu đề + meta + related mới.
+                    allUrls = urls;
+                    allLabels = labels;
+                    allAudios = audios;
+                    currentIndex = defIdx;
+                    audioUrl = audios.get(defIdx);
+                    pageUrl = item.videoId;
+                    titleView.setText(item.title != null ? item.title : "Đang phát...");
+                    String mm = item.uploader != null ? item.uploader : "";
+                    metaView.setText(mm);
+                    metaView.setVisibility(mm.isEmpty() ? View.GONE : View.VISIBLE);
+                    try {
+                        WatchHistory.push(this, item.videoId, item.title,
+                                item.thumbUrl, item.durationSec, item.uploader);
+                    } catch (Exception ignored) {
+                    }
+                    playUrl(urls.get(defIdx), audios.get(defIdx));
+                    player.prepare();
+                    player.play();
+                    relatedShown = RELATED_PAGE;
+                    loadRelated(item.videoId);
+                    // Cuộn lên đầu để thấy video mới.
+                    View scroll = findViewById(R.id.player_scroll);
+                    if (scroll != null) scroll.scrollTo(0, 0);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        "Không lấy được link phát: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     /** Phát 1 URL video; nếu có audio rời thì ghép (videoOnly câm -> có tiếng). */
@@ -174,10 +409,15 @@ public class PlayerActivity extends AppCompatActivity {
             playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            // Full màn hình: ẩn phần tiêu đề + liên quan, video lấp đầy.
+            View scroll = findViewById(R.id.player_scroll);
+            if (scroll != null) scroll.setVisibility(View.GONE);
         } else {
             if (getSupportActionBar() != null) getSupportActionBar().show();
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            View scroll = findViewById(R.id.player_scroll);
+            if (scroll != null) scroll.setVisibility(View.VISIBLE);
         }
         // Manifest đã có configChanges nên activity không restart;
         // giữ vị trí + trạng thái phát để không load lại từ đầu.
