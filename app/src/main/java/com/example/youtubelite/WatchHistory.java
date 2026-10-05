@@ -77,6 +77,17 @@ public final class WatchHistory {
         ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().remove(KEY).apply();
     }
 
+    /** Xoá 1 video khỏi lịch sử theo URL (bấm giữ trong trang Đã xem). */
+    public static synchronized void remove(Context ctx, String url) {
+        if (url == null || url.isEmpty()) return;
+        List<Entry> cur = list(ctx);
+        List<Entry> next = new ArrayList<>();
+        for (Entry e : cur) {
+            if (!e.url.equals(url)) next.add(e);
+        }
+        save(ctx, next);
+    }
+
     private static void save(Context ctx, List<Entry> items) {
         try {
             JSONArray arr = new JSONArray();

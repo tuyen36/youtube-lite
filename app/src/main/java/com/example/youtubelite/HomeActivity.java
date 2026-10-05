@@ -2,34 +2,47 @@ package com.example.youtubelite;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ListView;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.bumptech.glide.Glide;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Màn hình chính: đề xuất khi mở app.
- * - Mục "Thịnh hành tại Việt Nam" (trending VN).
+ * - Mục "Thịnh hành tại Việt Nam" (trending VN, nhiều nguồn dự phòng).
  * - Mục "Gợi ý cho bạn" (video liên quan tới lịch sử xem, fallback = trending).
  * - Ô tìm kiếm trên cùng -> sang SearchActivity.
+ * - Hiện 10 video/mục, nút "Xem thêm" để hiện tiếp (không dùng ListView trong
+ *   ScrollView vì ListView chỉ đo được 1 dòng -> gợi ý mãi chỉ hiện 1 video).
  * Bấm video -> mở PlayerActivity (lấy link như SearchActivity).
  */
 public class HomeActivity extends AppCompatActivity {
-    private VideoAdapter trendingAdapter;
-    private VideoAdapter suggestAdapter;
-    private final List<SearchActivity.VideoItem> trending = new ArrayList<>();
-    private final List<SearchActivity.VideoItem> suggest = new ArrayList<>();
+    private final List<SearchActivity.VideoItem> trendingFull = new ArrayList<>();
+    private final List<SearchActivity.VideoItem> suggestFull = new ArrayList<>();
+    private LinearLayout trendingContainer;
+    private LinearLayout suggestContainer;
+    private Button trendingMoreBtn;
+    private Button suggestMoreBtn;
     private TextView trendingState;
     private TextView suggestState;
+    private TextView suggestTitle;
+    private ScrollView homeScroll;
+    private int trendingShown = 10;
+    private int suggestShown = 10;
+    private static final int PAGE = 10;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -39,26 +52,14 @@ public class HomeActivity extends AppCompatActivity {
         EditText queryInput = findViewById(R.id.home_query_input);
         Button searchBtn = findViewById(R.id.home_search_btn);
         Button historyBtn = findViewById(R.id.home_history_btn);
-        ListView trendingList = findViewById(R.id.home_trending_list);
-        ListView suggestList = findViewById(R.id.home_suggest_list);
+        trendingContainer = findViewById(R.id.home_trending_container);
+        suggestContainer = findViewById(R.id.home_suggest_container);
+        trendingMoreBtn = findViewById(R.id.home_trending_more_btn);
+        suggestMoreBtn = findViewById(R.id.home_suggest_more_btn);
         trendingState = findViewById(R.id.home_trending_state);
         suggestState = findViewById(R.id.home_suggest_state);
-        TextView suggestTitle = findViewById(R.id.home_suggest_title);
-
-        trendingAdapter = new VideoAdapter(this, trending);
-        trendingList.setAdapter(trendingAdapter);
-        suggestAdapter = new VideoAdapter(this, suggest);
-        suggestList.setAdapter(suggestAdapter);
-
-        AdapterView.OnItemClickListener open = (parent, view, position, id) -> {
-            List<SearchActivity.VideoItem> src =
-                    parent == trendingList ? trending : suggest;
-            if (position < 0 || position >= src.size()) return;
-            SearchActivity.VideoItem item = src.get(position);
-            openVideo(item);
-        };
-        trendingList.setOnItemClickListener(open);
-        suggestList.setOnItemClickListener(open);
+        suggestTitle = findViewById(R.id.home_suggest_title);
+        homeScroll = findViewById(R.id.home_scroll);
 
         searchBtn.setOnClickListener(v -> {
             String q = queryInput.getText().toString().trim();
@@ -72,26 +73,17 @@ public class HomeActivity extends AppCompatActivity {
         });
 
         historyBtn.setOnClickListener(v -> {
-            List<WatchHistory.Entry> hist = WatchHistory.list(this);
-            if (hist.isEmpty()) {
-                Toast.makeText(this, "Chưa có lịch sử xem", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            StringBuilder sb = new StringBuilder();
-            int n = Math.min(hist.size(), 10);
-            for (int k = 0; k < n; k++) {
-                sb.append(k + 1).append(". ").append(hist.get(k).title).append("\n");
-            }
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("Đã xem gần đây (" + hist.size() + ")")
-                    .setMessage(sb.toString().trim())
-                    .setPositiveButton("Đóng", null)
-                    .setNeutralButton("Xoá lịch sử", (d, w) -> {
-                        WatchHistory.clear(this);
-                        Toast.makeText(this, "Đã xoá lịch sử", Toast.LENGTH_SHORT).show();
-                        loadSuggest();
-                    })
-                    .show();
+            Intent i = new Intent(this, HistoryActivity.class);
+            startActivity(i);
+        });
+
+        trendingMoreBtn.setOnClickListener(v -> {
+            trendingShown += PAGE;
+            renderTrending();
+        });
+        suggestMoreBtn.setOnClickListener(v -> {
+            suggestShown += PAGE;
+            renderSuggest();
         });
 
         suggestTitle.setText("Gợi ý cho bạn");
@@ -110,34 +102,93 @@ public class HomeActivity extends AppCompatActivity {
         trendingState.setVisibility(View.VISIBLE);
         suggestState.setText("Đang tải gợi ý...");
         suggestState.setVisibility(View.VISIBLE);
+        trendingMoreBtn.setVisibility(View.GONE);
+        suggestMoreBtn.setVisibility(View.GONE);
         new Thread(() -> {
             HomeSuggest.Bundle bundle = HomeSuggest.load(this);
             runOnUiThread(() -> {
-                trending.clear();
-                trending.addAll(bundle.trending);
-                trendingAdapter.notifyDataSetChanged();
+                trendingFull.clear();
+                trendingFull.addAll(bundle.trending);
+                trendingShown = PAGE;
+                renderTrending();
                 if (bundle.trending.isEmpty()) {
-                    trendingState.setText(bundle.trendingError.isEmpty()
-                            ? "Không tải được thịnh hành" : "Lỗi: " + bundle.trendingError);
+                    String err = bundle.trendingError.isEmpty()
+                            ? "Không tải được thịnh hành" : "Lỗi: " + bundle.trendingError;
+                    // Hiện rõ đang dùng nguồn nào khi có.
+                    trendingState.setText(err);
                 } else {
-                    trendingState.setVisibility(View.GONE);
+                    String src = bundle.trendingSource.isEmpty() ? ""
+                            : " (nguồn: " + bundle.trendingSource + ")";
+                    trendingState.setText("Thịnh hành" + src + " — bấm video để xem");
+                    // Ẩn dòng trạng thái sau 3s cho gọn.
+                    trendingState.postDelayed(() -> {
+                        if (!isFinishing()) trendingState.setVisibility(View.GONE);
+                    }, 3000);
                 }
-                suggest.clear();
+
+                suggestFull.clear();
                 if (!bundle.related.isEmpty()) {
-                    suggest.addAll(bundle.related);
+                    suggestFull.addAll(bundle.related);
                 } else {
                     // Chưa xem gì / không lấy được related -> fallback trending.
-                    suggest.addAll(bundle.trending);
+                    suggestFull.addAll(bundle.trending);
                 }
-                suggestAdapter.notifyDataSetChanged();
-                if (suggest.isEmpty()) {
+                suggestShown = PAGE;
+                renderSuggest();
+                if (suggestFull.isEmpty()) {
                     suggestState.setText(bundle.relatedError.isEmpty()
                             ? "Xem vài video để có gợi ý riêng" : "Lỗi: " + bundle.relatedError);
+                    suggestState.setVisibility(View.VISIBLE);
+                } else if (bundle.related.isEmpty()) {
+                    suggestState.setText("Chưa có lịch sử — đang hiện thịnh hành, xem vài video để có gợi ý riêng");
+                    suggestState.setVisibility(View.VISIBLE);
                 } else {
                     suggestState.setVisibility(View.GONE);
                 }
             });
         }).start();
+    }
+
+    private void renderTrending() {
+        renderList(trendingContainer, trendingFull, trendingShown);
+        trendingMoreBtn.setVisibility(
+                trendingShown < trendingFull.size() ? View.VISIBLE : View.GONE);
+    }
+
+    private void renderSuggest() {
+        renderList(suggestContainer, suggestFull, suggestShown);
+        suggestMoreBtn.setVisibility(
+                suggestShown < suggestFull.size() ? View.VISIBLE : View.GONE);
+    }
+
+    /** Vẽ tối đa shown video vào container (inflate item_video cho từng video). */
+    private void renderList(LinearLayout container,
+                            List<SearchActivity.VideoItem> full, int shown) {
+        container.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
+        int n = Math.min(shown, full.size());
+        for (int i = 0; i < n; i++) {
+            SearchActivity.VideoItem item = full.get(i);
+            View row = inflater.inflate(R.layout.item_video, container, false);
+            ImageView thumb = row.findViewById(R.id.video_thumb);
+            TextView title = row.findViewById(R.id.video_title);
+            TextView meta = row.findViewById(R.id.video_meta);
+            TextView duration = row.findViewById(R.id.video_duration);
+            title.setText(item.title != null ? item.title : "");
+            String m = item.uploader != null ? item.uploader : "";
+            meta.setText(m);
+            meta.setVisibility(m.isEmpty() ? View.GONE : View.VISIBLE);
+            String dur = item.durationLabel();
+            duration.setText(dur);
+            duration.setVisibility(dur.isEmpty() ? View.GONE : View.VISIBLE);
+            if (item.thumbUrl != null && !item.thumbUrl.isEmpty()) {
+                Glide.with(this).load(item.thumbUrl).centerCrop().into(thumb);
+            } else {
+                thumb.setImageResource(android.R.color.darker_gray);
+            }
+            row.setOnClickListener(v -> openVideo(item));
+            container.addView(row);
+        }
     }
 
     /** Bấm video đề xuất -> lấy link phát y hệt SearchActivity (có tiếng, đủ mức). */

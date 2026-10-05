@@ -19,6 +19,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".SearchActivity" android:exported="false" />
+        <activity android:name=".HistoryActivity" android:exported="false" />
         <activity
             android:name=".PlayerActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
