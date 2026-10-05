@@ -149,7 +149,7 @@ public class SearchActivity extends AppCompatActivity {
                         } catch (Exception ignored) {
                             h0 = 480;
                         }
-                        openPlayer(allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios);
+                        openPlayer(item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios);
                     });
                 } catch (Exception e) {
                     runOnUiThread(() -> Toast.makeText(this,
