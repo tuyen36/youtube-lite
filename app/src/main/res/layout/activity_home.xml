@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#111">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/home_query_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Tìm kiếm YouTube..."
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColor="#FFF"
+                android:textColorHint="#888" />
+
+            <Button
+                android:id="@+id/home_search_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tìm" />
+
+            <Button
+                android:id="@+id/home_history_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="8dp"
+                android:text="Đã xem" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Thịnh hành tại Việt Nam"
+            android:textColor="#FFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/home_trending_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#888"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <ListView
+            android:id="@+id/home_trending_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="100dp" />
+
+        <TextView
+            android:id="@+id/home_suggest_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Gợi ý cho bạn"
+            android:textColor="#FFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/home_suggest_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#888"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <ListView
+            android:id="@+id/home_suggest_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="100dp" />
+
+    </LinearLayout>
+</ScrollView>

@@ -2,6 +2,7 @@ package com.example.youtubelite;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.widget.AbsListView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
@@ -14,24 +15,48 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Màn hình tìm kiếm: hiện thumbnail + độ dài + kênh, tối đa 50 kết quả.
+ * Màn hình tìm kiếm: hiện thumbnail + độ dài + kênh, tải thêm khi kéo xuống.
  * Đã nối NewPipeExtractor: tìm thật, lọc 1080p/30fps qua QualityPolicy.
  */
 public class SearchActivity extends AppCompatActivity {
+    public static final String EXTRA_QUERY = "query";
     private EditText queryInput;
     private ListView resultList;
     private final List<VideoItem> items = new ArrayList<>();
     private VideoAdapter adapter;
 
-    private void openPlayer(String videoUrl, int height, @Nullable String audioUrl,
-                            ArrayList<String> allUrls, ArrayList<String> allLabels) {
-        Intent i = new Intent(this, PlayerActivity.class);
+    // Phân trang tìm kiếm: giữ extractor + trang kế tiếp.
+    private String currentQuery = "";
+    private org.schabi.newpipe.extractor.search.SearchExtractor searchExtractor;
+    private org.schabi.newpipe.extractor.Page nextPage;
+    private boolean loadingMore = false;
+
+    private void openPlayer(SearchActivity.VideoItem item, String videoUrl, int height,
+                            @Nullable String audioUrl,
+                            ArrayList<String> allUrls, ArrayList<String> allLabels,
+                            ArrayList<String> allAudios) {
+        openPlayer(this, item, videoUrl, height, audioUrl, allUrls, allLabels, allAudios);
+    }
+
+    static void openPlayer(android.content.Context ctx, SearchActivity.VideoItem item,
+                           String videoUrl, int height, @Nullable String audioUrl,
+                           ArrayList<String> allUrls, ArrayList<String> allLabels,
+                           ArrayList<String> allAudios) {
+        Intent i = new Intent(ctx, PlayerActivity.class);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_URL, videoUrl);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_HEIGHT, height);
         if (audioUrl != null) i.putExtra(PlayerActivity.EXTRA_AUDIO_URL, audioUrl);
         i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_URLS, allUrls);
         i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_LABELS, allLabels);
-        startActivity(i);
+        i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_AUDIOS, allAudios);
+        // Thông tin video để ghi lịch sử xem (gợi ý lần sau).
+        i.putExtra("video_page_url", item.videoId);
+        i.putExtra(PlayerActivity.EXTRA_VIDEO_TITLE, item.title);
+        i.putExtra(PlayerActivity.EXTRA_VIDEO_THUMB, item.thumbUrl);
+        i.putExtra(PlayerActivity.EXTRA_VIDEO_DURATION, item.durationSec);
+        i.putExtra(PlayerActivity.EXTRA_VIDEO_UPLOADER, item.uploader);
+        if (!(ctx instanceof android.app.Activity)) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(i);
     }
 
     @Override
@@ -45,10 +70,17 @@ public class SearchActivity extends AppCompatActivity {
 
         adapter = new VideoAdapter(this, items);
         resultList.setAdapter(adapter);
+        // Mở từ màn hình chính (HomeActivity) có kèm từ khóa -> tìm luôn.
+        String startQuery = getIntent().getStringExtra(EXTRA_QUERY);
+        if (startQuery != null && !startQuery.trim().isEmpty()) {
+            queryInput.setText(startQuery.trim());
+            resultList.post(() -> doSearch(startQuery.trim()));
+        }
         resultList.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= items.size()) return;
             VideoItem item = items.get(position);
             // Bấm vào mới lấy StreamInfo + lọc 1080p/30fps (chạy nền để không treo UI).
-            // Ưu tiên stream CÓ TIẾNG (progressive); chỉ dùng videoOnly khi không còn cách nào.
+            // Gộp progressive (có tiếng) + videoOnly (ghép audio rời) -> nhiều mức để chọn.
             Toast.makeText(this, "Đang lấy link phát...", Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 try {
@@ -57,58 +89,89 @@ public class SearchActivity extends AppCompatActivity {
                             org.schabi.newpipe.extractor.NewPipe.getService(0);
                     org.schabi.newpipe.extractor.stream.StreamInfo detail =
                             org.schabi.newpipe.extractor.stream.StreamInfo.getInfo(yt2, item.videoId);
-                    List<QualityPolicy.Stream> raw = new ArrayList<>();
-                    for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
-                        raw.add(mapVideoStream(vs));
-                    }
-                    List<QualityPolicy.Stream> prog = QualityPolicy.filter(raw);
-                    QualityPolicy.Stream pick = QualityPolicy.pickDefault(prog);
-                    String audioUrl = null;
+                    String bestAudio = null;
                     try {
                         if (detail.getAudioStreams() != null && !detail.getAudioStreams().isEmpty()) {
-                            audioUrl = detail.getAudioStreams().get(0).getContent();
+                            bestAudio = detail.getAudioStreams().get(0).getContent();
                         }
                     } catch (Exception ignored) {
-                        audioUrl = null;
+                        bestAudio = null;
                     }
-                    if (pick == null) {
-                        // Không còn progressive phù hợp -> dùng videoOnly tốt nhất + audio rời.
-                        List<QualityPolicy.Stream> only = new ArrayList<>();
-                        for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoOnlyStreams()) {
-                            only.add(mapVideoStream(vs));
+                    // 1) progressive (có sẵn tiếng) — ưu tiên vì máy yếu phát nhẹ nhất.
+                    List<QualityPolicy.Stream> rawProg = new ArrayList<>();
+                    for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
+                        rawProg.add(mapVideoStream(vs));
+                    }
+                    List<QualityPolicy.Stream> prog = QualityPolicy.filter(rawProg);
+                    // 2) videoOnly (câm) + audio rời — mở thêm các mức 480/720/1080.
+                    List<QualityPolicy.Stream> rawOnly = new ArrayList<>();
+                    for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoOnlyStreams()) {
+                        rawOnly.add(mapVideoStream(vs));
+                    }
+                    List<QualityPolicy.Stream> only = QualityPolicy.filter(rawOnly);
+
+                    // Gộp: progressive trước, videoOnly sau, khử trùng theo height.
+                    ArrayList<String> allUrls = new ArrayList<>();
+                    ArrayList<String> allLabels = new ArrayList<>();
+                    ArrayList<String> allAudios = new ArrayList<>();
+                    java.util.Set<Integer> seenHeights = new java.util.HashSet<>();
+                    for (QualityPolicy.Stream s : prog) {
+                        if (seenHeights.contains(s.height)) continue;
+                        seenHeights.add(s.height);
+                        allUrls.add(s.url);
+                        allLabels.add(s.label() + " ♪");
+                        allAudios.add(null); // progressive đã có tiếng
+                    }
+                    for (QualityPolicy.Stream s : only) {
+                        if (seenHeights.contains(s.height)) continue;
+                        seenHeights.add(s.height);
+                        allUrls.add(s.url);
+                        allLabels.add(s.label());
+                        allAudios.add(bestAudio);
+                    }
+                    runOnUiThread(() -> {
+                        if (allUrls.isEmpty()) {
+                            Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
+                            return;
                         }
-                        List<QualityPolicy.Stream> okOnly = QualityPolicy.filter(only);
-                        QualityPolicy.Stream vpick = QualityPolicy.pickDefault(okOnly);
-                        final QualityPolicy.Stream fpick = vpick;
-                        final String faudio = audioUrl;
-                        final ArrayList<String> allUrls = new ArrayList<>();
-                        final ArrayList<String> allLabels = new ArrayList<>();
-                        for (QualityPolicy.Stream s2 : okOnly) {
-                            allUrls.add(s2.url);
-                            allLabels.add(s2.label());
+                        // Mặc định: 480p nếu có, không thì mức đầu (cao nhất còn lại).
+                        int defIdx = 0;
+                        for (int k = 0; k < allLabels.size(); k++) {
+                            if (allLabels.get(k).startsWith("480p")) { defIdx = k; break; }
                         }
-                        runOnUiThread(() -> {
-                            if (fpick == null) {
-                                Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
-                                return;
-                            }
-                            openPlayer(fpick.url, fpick.height, faudio, allUrls, allLabels);
-                        });
-                        return;
-                    }
-                    final QualityPolicy.Stream fpick2 = pick;
-                    final ArrayList<String> allUrls2 = new ArrayList<>();
-                    final ArrayList<String> allLabels2 = new ArrayList<>();
-                    for (QualityPolicy.Stream s3 : prog) {
-                        allUrls2.add(s3.url);
-                        allLabels2.add(s3.label());
-                    }
-                    runOnUiThread(() -> openPlayer(fpick2.url, fpick2.height, null, allUrls2, allLabels2));
+                        String a0 = allAudios.get(defIdx);
+                        // Lấy height từ label "720p" để hiện đúng.
+                        int h0 = 480;
+                        try {
+                            String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
+                            if (d.length() > 4) d = d.substring(0, 4);
+                            h0 = Integer.parseInt(d);
+                        } catch (Exception ignored) {
+                            h0 = 480;
+                        }
+                        openPlayer(allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios);
+                    });
                 } catch (Exception e) {
                     runOnUiThread(() -> Toast.makeText(this,
                             "Không lấy được link phát: " + e.getMessage(), Toast.LENGTH_LONG).show());
                 }
             }).start();
+        });
+
+        // Kéo xuống đáy list -> tải thêm trang kế tiếp.
+        resultList.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisible, int visibleCount, int totalCount) {
+                if (totalCount == 0 || loadingMore) return;
+                if (nextPage == null) return;
+                if (firstVisible + visibleCount >= totalCount - 4) {
+                    loadMore();
+                }
+            }
         });
 
         searchBtn.setOnClickListener(v -> doSearch(queryInput.getText().toString().trim()));
@@ -121,6 +184,9 @@ public class SearchActivity extends AppCompatActivity {
         }
         // Tìm thật bằng NewPipeExtractor trên luồng nền (cấm chạy mạng trên UI thread).
         Toast.makeText(this, "Đang tìm: " + q, Toast.LENGTH_SHORT).show();
+        currentQuery = q;
+        nextPage = null;
+        searchExtractor = null;
         new Thread(() -> {
             try {
                 NewPipeHolder.initIfNeeded();
@@ -131,45 +197,22 @@ public class SearchActivity extends AppCompatActivity {
                 extractor.fetchPage();
                 org.schabi.newpipe.extractor.search.SearchInfo info =
                         org.schabi.newpipe.extractor.search.SearchInfo.getInfo(extractor);
-                List<VideoItem> found = new ArrayList<>();
-                for (org.schabi.newpipe.extractor.InfoItem it : info.getRelatedItems()) {
-                    if (!(it instanceof org.schabi.newpipe.extractor.stream.StreamInfoItem)) continue;
-                    org.schabi.newpipe.extractor.stream.StreamInfoItem s =
-                            (org.schabi.newpipe.extractor.stream.StreamInfoItem) it;
-                    String url = s.getUrl();
-                    String title = s.getName() != null ? s.getName() : url;
-                    // Thumbnail + độ dài + kênh để hiện list đẹp.
-                    String thumb = "";
-                    try {
-                        if (s.getThumbnails() != null && !s.getThumbnails().isEmpty()) {
-                            thumb = s.getThumbnails().get(0).getUrl();
-                        }
-                    } catch (Exception ignored) {
-                        thumb = "";
-                    }
-                    long dur = -1;
-                    try {
-                        dur = s.getDuration();
-                    } catch (Exception ignored) {
-                        dur = -1;
-                    }
-                    String uploader = "";
-                    try {
-                        uploader = s.getUploaderName() != null ? s.getUploaderName() : "";
-                    } catch (Exception ignored) {
-                        uploader = "";
-                    }
-                    // Hiện kết quả NGAY, chưa lấy stream chi tiết (nhanh + không trống list).
-                    // Bấm vào mới lấy StreamInfo + lọc 1080p/30fps (xem onItemClick).
-                    found.add(new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader));
-                    if (found.size() >= 50) break; // nâng lên 50 kết quả
+                // Giữ lại để tải thêm.
+                searchExtractor = extractor;
+                try {
+                    nextPage = info.getNextPage();
+                } catch (Exception ignored) {
+                    nextPage = null;
                 }
+                List<VideoItem> found = itemsFromInfo(info);
                 runOnUiThread(() -> {
                     items.clear();
                     items.addAll(found);
                     adapter.notifyDataSetChanged();
                     if (found.isEmpty()) {
                         Toast.makeText(this, "Không tìm thấy video nào, thử từ khóa khác", Toast.LENGTH_LONG).show();
+                    } else if (nextPage != null) {
+                        Toast.makeText(this, "Kéo xuống để tải thêm", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
@@ -179,8 +222,91 @@ public class SearchActivity extends AppCompatActivity {
         }).start();
     }
 
+    /** Tải thêm trang kế tiếp khi kéo xuống đáy (tối đa ~200 video). */
+    private void loadMore() {
+        if (loadingMore || nextPage == null || searchExtractor == null) return;
+        loadingMore = true;
+        Toast.makeText(this, "Đang tải thêm...", Toast.LENGTH_SHORT).show();
+        final org.schabi.newpipe.extractor.Page page = nextPage;
+        new Thread(() -> {
+            try {
+                org.schabi.newpipe.extractor.ListExtractor.InfoItemsPage<
+                        org.schabi.newpipe.extractor.InfoItem> next =
+                        searchExtractor.getPage(page);
+                List<VideoItem> more = new ArrayList<>();
+                for (org.schabi.newpipe.extractor.InfoItem it : next.getItems()) {
+                    if (!(it instanceof org.schabi.newpipe.extractor.stream.StreamInfoItem)) continue;
+                    more.add(itemFromStreamItem(
+                            (org.schabi.newpipe.extractor.stream.StreamInfoItem) it));
+                }
+                org.schabi.newpipe.extractor.Page following = null;
+                try {
+                    following = next.getNextPage();
+                } catch (Exception ignored) {
+                    following = null;
+                }
+                final org.schabi.newpipe.extractor.Page fNext = following;
+                runOnUiThread(() -> {
+                    loadingMore = false;
+                    nextPage = fNext;
+                    if (!more.isEmpty() && items.size() < 200) {
+                        items.addAll(more);
+                        adapter.notifyDataSetChanged();
+                    }
+                    if (fNext == null) {
+                        Toast.makeText(this, "Đã hết kết quả", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    loadingMore = false;
+                    Toast.makeText(this, "Tải thêm lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    static VideoItem itemFromStreamItem(
+            org.schabi.newpipe.extractor.stream.StreamInfoItem s) {
+        String url = s.getUrl();
+        String title = s.getName() != null ? s.getName() : url;
+        String thumb = "";
+        try {
+            if (s.getThumbnails() != null && !s.getThumbnails().isEmpty()) {
+                thumb = s.getThumbnails().get(0).getUrl();
+            }
+        } catch (Exception ignored) {
+            thumb = "";
+        }
+        long dur = -1;
+        try {
+            dur = s.getDuration();
+        } catch (Exception ignored) {
+            dur = -1;
+        }
+        String uploader = "";
+        try {
+            uploader = s.getUploaderName() != null ? s.getUploaderName() : "";
+        } catch (Exception ignored) {
+            uploader = "";
+        }
+        return new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader);
+    }
+
+    private static List<VideoItem> itemsFromInfo(
+            org.schabi.newpipe.extractor.search.SearchInfo info) {
+        List<VideoItem> found = new ArrayList<>();
+        for (org.schabi.newpipe.extractor.InfoItem it : info.getRelatedItems()) {
+            if (!(it instanceof org.schabi.newpipe.extractor.stream.StreamInfoItem)) continue;
+            found.add(itemFromStreamItem(
+                    (org.schabi.newpipe.extractor.stream.StreamInfoItem) it));
+            if (found.size() >= 50) break; // trang đầu 50 kết quả
+        }
+        return found;
+    }
+
     /** Map VideoStream của NewPipeExtractor sang Stream của QualityPolicy. */
-    private static QualityPolicy.Stream mapVideoStream(
+    static QualityPolicy.Stream mapVideoStream(
             org.schabi.newpipe.extractor.stream.VideoStream vs) {
         int height = 0;
         try {

@@ -11,14 +11,18 @@
         android:theme="@style/Theme.YoutubeLite"
         android:hardwareAccelerated="true">
         <activity
-            android:name=".SearchActivity"
+            android:name=".HomeActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".PlayerActivity" />
+        <activity android:name=".SearchActivity" android:exported="false" />
+        <activity
+            android:name=".PlayerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:supportsPictureInPicture="false" />
     </application>
 
 </manifest>
