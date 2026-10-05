@@ -72,6 +72,10 @@ public class PlayerActivity extends AppCompatActivity {
     private int relatedShown = 10;
     private static final int RELATED_PAGE = 10;
     private String pageUrl;
+    // Lịch sử phát trong màn hình này: previous = phát lại video trước,
+    // next = video liên quan đầu (video đầu trong list liên quan).
+    private final List<SearchActivity.VideoItem> playTrail = new ArrayList<>();
+    private int trailIndex = -1;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -136,16 +140,30 @@ public class PlayerActivity extends AppCompatActivity {
                 .setTrackSelector(trackSelector)
                 .build();
         playerView.setPlayer(player);
+        playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
         playUrl(url, audioUrl);
+        // Ghi dấu video đầu vào lịch phát (để previous/next hoạt động).
+        pushTrail(pageUrl != null ? pageUrl : url, vTitle,
+                getIntent().getStringExtra(EXTRA_VIDEO_THUMB),
+                getIntent().getLongExtra(EXTRA_VIDEO_DURATION, -1),
+                vUploader);
+        // Nối nút next/previous của controller: next = video liên quan đầu,
+        // previous = phát lại video trước đó trong lịch phát.
         player.addListener(new Player.Listener() {
             @Override
             public void onTracksChanged(Tracks tracks) {
                 lockToHeight(tracks, height);
             }
+
+            @Override
+            public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
+                bindControllerPrevNext();
+            }
         });
         player.prepare();
         player.play();
+        bindControllerPrevNext();
 
         // Nút bánh răng: chọn chất lượng + full màn hình (góc phải, API 21).
         fullBtn.setOnClickListener(v -> toggleFullscreen());
@@ -330,6 +348,8 @@ public class PlayerActivity extends AppCompatActivity {
                     currentIndex = defIdx;
                     audioUrl = audios.get(defIdx);
                     pageUrl = item.videoId;
+                    pushTrail(item.videoId, item.title, item.thumbUrl,
+                            item.durationSec, item.uploader);
                     titleView.setText(item.title != null ? item.title : "Đang phát...");
                     String mm = item.uploader != null ? item.uploader : "";
                     metaView.setText(mm);
@@ -397,11 +417,13 @@ public class PlayerActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** Full màn hình KHÔNG load lại: configChanges giữ activity + giữ vị trí + resume. */
+    /** Full màn hình lấp đầy: resize FILL + khung video match_parent khi ngang. */
     private void toggleFullscreen() {
         fullscreen = !fullscreen;
         long pos = player != null ? player.getCurrentPosition() : 0;
         boolean wasPlaying = player != null && player.isPlaying();
+        View scroll = findViewById(R.id.player_scroll);
+        View frame = findViewById(R.id.player_frame);
         if (fullscreen) {
             if (getSupportActionBar() != null) getSupportActionBar().hide();
             // Xoay ngang màn hình xem (sensorLandscape: theo tay cầm, không bị ngược).
@@ -409,14 +431,30 @@ public class PlayerActivity extends AppCompatActivity {
             playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            // Full màn hình: ẩn phần tiêu đề + liên quan, video lấp đầy.
-            View scroll = findViewById(R.id.player_scroll);
+            // Lấp đầy: khung video match_parent + PlayerView FILL (cắt viền đen 2 bên).
+            if (frame != null) {
+                android.view.ViewGroup.LayoutParams lp = frame.getLayoutParams();
+                lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                frame.setLayoutParams(lp);
+            }
+            android.view.ViewGroup.LayoutParams vpl = playerView.getLayoutParams();
+            vpl.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+            playerView.setLayoutParams(vpl);
+            playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL);
             if (scroll != null) scroll.setVisibility(View.GONE);
         } else {
             if (getSupportActionBar() != null) getSupportActionBar().show();
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
-            View scroll = findViewById(R.id.player_scroll);
+            if (frame != null) {
+                android.view.ViewGroup.LayoutParams lp = frame.getLayoutParams();
+                lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+                frame.setLayoutParams(lp);
+            }
+            android.view.ViewGroup.LayoutParams vpl = playerView.getLayoutParams();
+            vpl.height = (int) (220 * getResources().getDisplayMetrics().density);
+            playerView.setLayoutParams(vpl);
+            playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
             if (scroll != null) scroll.setVisibility(View.VISIBLE);
         }
         // Manifest đã có configChanges nên activity không restart;
@@ -424,6 +462,84 @@ public class PlayerActivity extends AppCompatActivity {
         if (player != null) {
             player.seekTo(pos);
             if (wasPlaying) player.play();
+        }
+    }
+
+    /** Ghi dấu video vào lịch phát trong màn hình (cho previous/next). */
+    private void pushTrail(String videoPageUrl, String vTitle, String vThumb,
+                           long vDur, String vUploader) {
+        // Cắt nhánh "tới" khi quay lại rồi rẽ hướng mới (giống trình duyệt).
+        if (trailIndex >= 0 && trailIndex < playTrail.size() - 1) {
+            for (int k = playTrail.size() - 1; k > trailIndex; k--) {
+                playTrail.remove(k);
+            }
+        }
+        // Trùng video đang xem thì không ghi đè.
+        if (trailIndex >= 0 && trailIndex < playTrail.size()) {
+            SearchActivity.VideoItem cur = playTrail.get(trailIndex);
+            if (cur != null && cur.videoId != null && cur.videoId.equals(videoPageUrl)) return;
+        }
+        playTrail.add(new SearchActivity.VideoItem(
+                videoPageUrl != null ? videoPageUrl : "",
+                vTitle != null ? vTitle : "",
+                new ArrayList<>(),
+                vThumb != null ? vThumb : "", vDur, vUploader != null ? vUploader : ""));
+        // Giữ tối đa 50 video trong lịch phát.
+        if (playTrail.size() > 50) {
+            playTrail.remove(0);
+        }
+        trailIndex = playTrail.size() - 1;
+    }
+
+    /** Nối nút previous/next của controller vào lịch phát + list liên quan. */
+    private void bindControllerPrevNext() {
+        try {
+            playerView.setShowPreviousButton(true);
+            playerView.setShowNextButton(true);
+        } catch (Exception ignored) {
+        }
+        try {
+            View prevBtn = findViewById(androidx.media3.ui.R.id.exo_prev);
+            View nextBtn = findViewById(androidx.media3.ui.R.id.exo_next);
+            if (prevBtn != null) {
+                prevBtn.setOnClickListener(v -> playPrevious());
+            }
+            if (nextBtn != null) {
+                nextBtn.setOnClickListener(v -> playNext());
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Nút previous: phát lại video trước đó trong lịch phát màn hình này. */
+    private void playPrevious() {
+        if (trailIndex > 0 && trailIndex - 1 < playTrail.size()) {
+            trailIndex--;
+            SearchActivity.VideoItem it = playTrail.get(trailIndex);
+            switchToRelated(it);
+        } else {
+            // Đang ở video đầu -> phát lại từ đầu video hiện tại.
+            if (player != null) {
+                player.seekTo(0);
+                player.play();
+            }
+        }
+    }
+
+    /** Nút next: phát video liên quan đầu (video đầu trong list liên quan). */
+    private void playNext() {
+        // Quay lại từ lịch phát (đã bấm previous rồi bấm next).
+        if (trailIndex >= 0 && trailIndex + 1 < playTrail.size()) {
+            trailIndex++;
+            SearchActivity.VideoItem it = playTrail.get(trailIndex);
+            switchToRelated(it);
+            return;
+        }
+        if (!relatedFull.isEmpty()) {
+            // Video đầu trong danh sách đề xuất đang phát (giống YouTube autoplay).
+            switchToRelated(relatedFull.get(0));
+        } else if (player != null) {
+            Toast.makeText(this, "Chưa có video liên quan để phát tiếp", Toast.LENGTH_SHORT).show();
         }
     }
 

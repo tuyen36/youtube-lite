@@ -18,7 +18,8 @@
             android:layout_width="match_parent"
             android:layout_height="220dp"
             app:show_buffering="when_playing"
-            app:show_shuffle_button="false" />
+            app:show_shuffle_button="false"
+            app:resize_mode="fit" />
 
         <!-- Nút chọn độ phân giải + full màn hình (góc phải, tương thích API 21) -->
         <LinearLayout
