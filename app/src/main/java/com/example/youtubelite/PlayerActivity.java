@@ -160,6 +160,14 @@ public class PlayerActivity extends AppCompatActivity {
             public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
                 bindControllerPrevNext();
             }
+
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                // ExoPlayer vẽ lại controller khi sẵn sàng -> ép sáng lại nút next/prev.
+                if (playbackState == Player.STATE_READY) {
+                    bindControllerPrevNext();
+                }
+            }
         });
         player.prepare();
         player.play();
@@ -491,24 +499,38 @@ public class PlayerActivity extends AppCompatActivity {
         trailIndex = playTrail.size() - 1;
     }
 
-    /** Nối nút previous/next của controller vào lịch phát + list liên quan. */
+    /** Nối nút previous/next của controller vào lịch phát + list liên quan.
+     * ExoPlayer tự làm mờ (dim) 2 nút này khi timeline chỉ có 1 video, nên phải
+     * ép sáng + gắn click SAU mỗi lần player sẵn sàng (kể cả khi đổi video). */
     private void bindControllerPrevNext() {
         try {
             playerView.setShowPreviousButton(true);
             playerView.setShowNextButton(true);
         } catch (Exception ignored) {
         }
-        try {
-            View prevBtn = findViewById(androidx.media3.ui.R.id.exo_prev);
-            View nextBtn = findViewById(androidx.media3.ui.R.id.exo_next);
-            if (prevBtn != null) {
-                prevBtn.setOnClickListener(v -> playPrevious());
+        // Ép sáng + cho bấm: ExoPlayer để alpha mờ khi "không có prev/next" trong timeline.
+        playerView.post(() -> {
+            try {
+                View prevBtn = ((View) playerView).findViewById(androidx.media3.ui.R.id.exo_prev);
+                View nextBtn = ((View) playerView).findViewById(androidx.media3.ui.R.id.exo_next);
+                // Fallback: tìm trong cả activity nếu controller chưa inflate xong.
+                if (prevBtn == null) prevBtn = findViewById(androidx.media3.ui.R.id.exo_prev);
+                if (nextBtn == null) nextBtn = findViewById(androidx.media3.ui.R.id.exo_next);
+                if (prevBtn != null) {
+                    prevBtn.setEnabled(true);
+                    prevBtn.setAlpha(1f);
+                    prevBtn.setClickable(true);
+                    prevBtn.setOnClickListener(v -> playPrevious());
+                }
+                if (nextBtn != null) {
+                    nextBtn.setEnabled(true);
+                    nextBtn.setAlpha(1f);
+                    nextBtn.setClickable(true);
+                    nextBtn.setOnClickListener(v -> playNext());
+                }
+            } catch (Exception ignored) {
             }
-            if (nextBtn != null) {
-                nextBtn.setOnClickListener(v -> playNext());
-            }
-        } catch (Exception ignored) {
-        }
+        });
     }
 
     /** Nút previous: phát lại video trước đó trong lịch phát màn hình này. */
