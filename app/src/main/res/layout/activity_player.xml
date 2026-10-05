@@ -12,4 +12,30 @@
         app:show_buffering="when_playing"
         app:show_shuffle_button="false" />
 
+    <!-- Nút chọn độ phân giải + full màn hình (góc phải, tương thích API 21) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/quality_btn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="#80000000"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:contentDescription="Độ phân giải" />
+
+        <ImageButton
+            android:id="@+id/fullscreen_btn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginLeft="8dp"
+            android:background="#80000000"
+            android:src="@android:drawable/ic_menu_fullscreen"
+            android:contentDescription="Toàn màn hình" />
+    </LinearLayout>
+
 </FrameLayout>

@@ -1,52 +1,76 @@
 package com.example.youtubelite;
 
+import android.app.AlertDialog;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.ImageButton;
+
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.MergingMediaSource;
+import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.datasource.DefaultHttpDataSource;
+
+import java.util.ArrayList;
 
 /**
  * Màn hình phát video cho máy cũ:
- * - Buffer nhỏ (15s) để RAM 1GB không tràn.
- * - Ép tốc độ phát 1.0x, khóa chọn track theo QualityPolicy (<=1080p, <=30fps).
+ * - Có tiếng: progressive phát trực tiếp; videoOnly thì ghép audio rời.
+ * - Chọn độ phân giải trong menu bánh răng (chỉ các mức <=1080p/30fps).
+ * - Nút phóng to toàn màn hình (xoay ngang + ẩn action bar).
+ * - Buffer nhỏ 5-15s, RAM 1GB không tràn.
  */
 public class PlayerActivity extends AppCompatActivity {
     public static final String EXTRA_VIDEO_URL = "video_url";
     public static final String EXTRA_VIDEO_HEIGHT = "video_height";
+    public static final String EXTRA_AUDIO_URL = "audio_url";
+    public static final String EXTRA_ALL_URLS = "all_urls";
+    public static final String EXTRA_ALL_LABELS = "all_labels";
 
     private ExoPlayer player;
     private PlayerView playerView;
+    private boolean fullscreen = false;
+    private ArrayList<String> allUrls = new ArrayList<>();
+    private ArrayList<String> allLabels = new ArrayList<>();
+    private String audioUrl;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
         playerView = findViewById(R.id.player_view);
+        ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
 
         String url = getIntent().getStringExtra(EXTRA_VIDEO_URL);
         int height = getIntent().getIntExtra(EXTRA_VIDEO_HEIGHT, 480);
+        audioUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
+        if (getIntent().getStringArrayListExtra(EXTRA_ALL_URLS) != null) {
+            allUrls = getIntent().getStringArrayListExtra(EXTRA_ALL_URLS);
+        }
+        if (getIntent().getStringArrayListExtra(EXTRA_ALL_LABELS) != null) {
+            allLabels = getIntent().getStringArrayListExtra(EXTRA_ALL_LABELS);
+        }
         if (url == null) {
             finish();
             return;
         }
 
-        // Buffer nhỏ cho máy RAM 1GB: min 5s, max 15s, phát khi đủ 2.5s.
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(5000, 15000, 2500, 2500)
                 .build();
 
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(this);
-        // Giới hạn track video: <=1080p, <=30fps (API Media3 1.4.1 chắc chắn có).
-        // Không ép codec ở đây để tránh vỡ build — QualityPolicy đã ưu tiên
-        // H.264 khi chọn URL progressive trước khi đưa vào player.
         trackSelector.setParameters(
                 trackSelector.buildUponParameters()
                         .setMaxVideoSize(1920, QualityPolicy.MAX_HEIGHT)
@@ -59,7 +83,7 @@ public class PlayerActivity extends AppCompatActivity {
                 .build();
         playerView.setPlayer(player);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
-        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
+        playUrl(url, audioUrl);
         player.addListener(new Player.Listener() {
             @Override
             public void onTracksChanged(Tracks tracks) {
@@ -68,6 +92,66 @@ public class PlayerActivity extends AppCompatActivity {
         });
         player.prepare();
         player.play();
+
+        // Nút bánh răng của PlayerView: chen thêm chọn chất lượng + full màn hình
+        // bằng nút riêng góc phải (đơn giản, tương thích API 21).
+        fullBtn.setOnClickListener(v -> toggleFullscreen());
+        ImageButton qualityBtn = findViewById(R.id.quality_btn);
+        qualityBtn.setOnClickListener(v -> showQualityDialog());
+    }
+
+    /** Phát 1 URL video; nếu có audio rời thì ghép (videoOnly câm -> có tiếng). */
+    private void playUrl(String videoUrl, @Nullable String audio) {
+        DefaultHttpDataSource.Factory http =
+                new DefaultHttpDataSource.Factory()
+                        .setUserAgent("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
+        if (audio == null || audio.isEmpty()) {
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)));
+            return;
+        }
+        ProgressiveMediaSource videoSrc = new ProgressiveMediaSource.Factory(http)
+                .createMediaSource(MediaItem.fromUri(Uri.parse(videoUrl)));
+        ProgressiveMediaSource audioSrc = new ProgressiveMediaSource.Factory(http)
+                .createMediaSource(MediaItem.fromUri(Uri.parse(audio)));
+        // Ghép hình + tiếng: videoOnly (câm) + audio rời -> có tiếng.
+        MergingMediaSource merged = new MergingMediaSource(videoSrc, audioSrc);
+        player.setMediaSource(merged);
+    }
+
+    /** Dialog chọn độ phân giải (chỉ các mức đã lọc <=1080p/30fps). */
+    private void showQualityDialog() {
+        if (allLabels.isEmpty() || allUrls.isEmpty()) {
+            return;
+        }
+        String[] labels = allLabels.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+                .setTitle("Độ phân giải (tối đa 1080p, không 60fps)")
+                .setItems(labels, (dialog, which) -> {
+                    if (which < 0 || which >= allUrls.size()) return;
+                    long pos = player != null ? player.getCurrentPosition() : 0;
+                    boolean wasPlaying = player != null && player.isPlaying();
+                    playUrl(allUrls.get(which), audioUrl);
+                    player.prepare();
+                    player.seekTo(pos);
+                    if (wasPlaying) player.play();
+                })
+                .show();
+    }
+
+    /** Phóng to toàn màn hình: xoay ngang + ẩn action bar. Bấm lại để về dọc. */
+    private void toggleFullscreen() {
+        fullscreen = !fullscreen;
+        if (fullscreen) {
+            if (getSupportActionBar() != null) getSupportActionBar().hide();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            if (getSupportActionBar() != null) getSupportActionBar().show();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            playerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        }
     }
 
     /** Khóa đúng mức user chọn (vd 720p), không cho ExoPlayer tự nhảy lên 60fps. */
