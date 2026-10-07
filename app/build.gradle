@@ -11,8 +11,8 @@ android {
         // May phu cu: ho tro tu Android 5.0 (Lollipop, API 21)
         minSdk 21
         targetSdk 34
-        versionCode 7
-        versionName "1.6"
+        versionCode 8
+        versionName "1.7"
 
         // Asus FonePad 8 K016 dùng chip Intel Atom Z3560 (x86), không phải ARM:
         // phải build cả x86 lẫn armeabi-v7a thì máy Intel mới mở được app.
@@ -50,10 +50,10 @@ dependencies {
     implementation "androidx.media3:media3-ui:$media3Version"
     implementation "androidx.media3:media3-datasource-okhttp:$media3Version"
 
-    // NewPipeExtractor FORK tuyen36 — từ v0.26.5, sửa API Android 6+ về API 21
-    // (URLDecoder.decode(String,Charset) -> decode(String,String)) để K016 hết văng.
-    // JitPack build thẳng từ nhánh dev của fork.
-    implementation "com.github.tuyen36:NewPipeExtractor:dev-SNAPSHOT"
+    // NewPipeExtractor FORK tuyen36 — tag v0.26.5-k016: tu v0.26.5 goc (khong Record),
+    // va 6 cho API 29+/30+/33+ ve API 21 (URLEncoder/URLDecoder String, trim, 3 ngoi).
+    // JitPack build tu tag co dinh, on dinh hon dev-SNAPSHOT.
+    implementation "com.github.tuyen36:NewPipeExtractor:v0.26.5-k016"
 
     implementation "com.squareup.okhttp3:okhttp:3.14.9"
     // Desugar 2.1.4: khớp AGP 8.7.3, có global-synthetics consumer cho Record.
