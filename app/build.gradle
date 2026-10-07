@@ -11,8 +11,8 @@ android {
         // May phu cu: ho tro tu Android 5.0 (Lollipop, API 21)
         minSdk 21
         targetSdk 34
-        versionCode 6
-        versionName "1.5"
+        versionCode 7
+        versionName "1.6"
 
         // Asus FonePad 8 K016 dùng chip Intel Atom Z3560 (x86), không phải ARM:
         // phải build cả x86 lẫn armeabi-v7a thì máy Intel mới mở được app.
@@ -56,9 +56,9 @@ dependencies {
     implementation "com.github.tuyen36:NewPipeExtractor:dev-SNAPSHOT"
 
     implementation "com.squareup.okhttp3:okhttp:3.14.9"
-    // Desugar 1.2.3: dòng 1.x, không có Record nên D8/AGP 8.5.2 build được.
-    // 2.x chứa Record backport, D8 kèm AGP 8.5.2 không tạo được global synthetic -> fail mergeExtDex.
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.2.3"
+    // Desugar 2.1.4: khớp AGP 8.7.3, có global-synthetics consumer cho Record.
+    // Bản 1.x thiếu consumer nên D8 fail mergeExtDex với lib mới (fork dev-SNAPSHOT).
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
     implementation "androidx.appcompat:appcompat:1.6.1"
     implementation "com.google.android.material:material:1.11.0"
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
