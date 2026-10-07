@@ -56,9 +56,9 @@ dependencies {
     implementation "com.github.tuyen36:NewPipeExtractor:dev-SNAPSHOT"
 
     implementation "com.squareup.okhttp3:okhttp:3.14.9"
-    // Desugar 2.0.4: bản 2.0.x cuối có trên Maven (2.0.5 không tồn tại).
-    // 2.1.x đòi Record desugar nên D8 fail với Java 8.
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
+    // Desugar 1.2.3: dòng 1.x, không có Record nên D8/AGP 8.5.2 build được.
+    // 2.x chứa Record backport, D8 kèm AGP 8.5.2 không tạo được global synthetic -> fail mergeExtDex.
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.2.3"
     implementation "androidx.appcompat:appcompat:1.6.1"
     implementation "com.google.android.material:material:1.11.0"
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
