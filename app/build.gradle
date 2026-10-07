@@ -11,8 +11,8 @@ android {
         // May phu cu: ho tro tu Android 5.0 (Lollipop, API 21)
         minSdk 21
         targetSdk 34
-        versionCode 5
-        versionName "1.4"
+        versionCode 6
+        versionName "1.5"
 
         // Asus FonePad 8 K016 dùng chip Intel Atom Z3560 (x86), không phải ARM:
         // phải build cả x86 lẫn armeabi-v7a thì máy Intel mới mở được app.
@@ -56,8 +56,8 @@ dependencies {
     implementation "com.github.tuyen36:NewPipeExtractor:dev-SNAPSHOT"
 
     implementation "com.squareup.okhttp3:okhttp:3.14.9"
-    // Desugar để Java 8 API (Optional, Stream...) chạy được trên Android 5.0.
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+    // Desugar 2.0.5: bản cuối tương thích AGP 8.5 + Java 8 (2.1.x đòi Record desugar, D8 fail).
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.5"
     implementation "androidx.appcompat:appcompat:1.6.1"
     implementation "com.google.android.material:material:1.11.0"
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
