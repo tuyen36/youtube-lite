@@ -88,8 +88,9 @@ public class PlayerActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
-        // Phat nen: KHONG giu man hinh sang nua (de user tat man nghe tieng).
-        // Ban 1.9 giu FLAG_KEEP_SCREEN_ON chong lai viec tat man -> xung dot phat nen.
+        // 2.4: giu man sang KHI DANG XEM (chong tu tat do timeout).
+        // Bam nut nguon tat man van tat duoc (co nay khong can) -> van nghe nen.
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         playerView = findViewById(R.id.player_view);
         ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
         titleView = findViewById(R.id.player_title);
