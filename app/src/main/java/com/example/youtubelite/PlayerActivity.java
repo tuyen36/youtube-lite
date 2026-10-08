@@ -436,8 +436,9 @@ public class PlayerActivity extends AppCompatActivity {
      * còn lại là chuẩn (giống YouTube), không méo hình. */
     private void toggleFullscreen() {
         fullscreen = !fullscreen;
-        long pos = player != null ? player.getCurrentPosition() : 0;
-        boolean wasPlaying = player != null && player.isPlaying();
+        // KHONG seekTo o day: seek lam ExoPlayer xa buffer + tai lai tu mang
+        // -> video khueng/tam dung roi load tiep. Player tu giu vi tri khi
+        // doi layout (da dung texture_view + configChanges), chi doi khung hinh.
         View scroll = findViewById(R.id.player_scroll);
         View frame = findViewById(R.id.player_frame);
         if (fullscreen) {
@@ -474,12 +475,8 @@ public class PlayerActivity extends AppCompatActivity {
             playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
             if (scroll != null) scroll.setVisibility(View.VISIBLE);
         }
-        // Manifest đã có configChanges nên activity không restart;
-        // giữ vị trí + trạng thái phát để không load lại từ đầu.
-        if (player != null) {
-            player.seekTo(pos);
-            if (wasPlaying) player.play();
-        }
+        // Manifest da co configChanges nen activity khong restart, player tu
+        // giu vi tri + trang thai phat -> khong seek/play lai de khoi load lai.
     }
 
     /** Ghi dấu video vào lịch phát trong màn hình (cho previous/next). */
