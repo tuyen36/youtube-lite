@@ -1,6 +1,7 @@
 package com.example.youtubelite;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,14 +20,11 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
-import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.MergingMediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.datasource.DefaultHttpDataSource;
-import androidx.media3.common.C;
 
 import com.bumptech.glide.Glide;
 
@@ -69,11 +67,14 @@ public class PlayerActivity extends AppCompatActivity {
     private TextView relatedState;
     private LinearLayout relatedContainer;
     private Button relatedMoreBtn;
-    // Va nhe chay nen: wifi lock giu wifi khi tat man (WAKE_MODE_LOCAL chi giu CPU,
-    // khong giu wifi -> buffer can la dung). Nho vi tri de mo lai tiep tuc, khong tu dau.
-    private android.net.wifi.WifiManager.WifiLock wifiLock;
+    // 2.2: player chung trong service (tat man / Activity chet nhac van song).
+    // Nho video hien tai + khoa luu vi tri de mo lai tiep tuc dung cho.
+    // Bo wifiLock rieng: service giu CPU + wifi lock roi (Activity giu rieng gay leak).
+    private String currentVideoUrl;
+    private String currentKey = "";
     private long resumePosition = 0;
     private boolean resumePlay = true;
+    private Player.Listener playerListener;
     private final List<SearchActivity.VideoItem> relatedFull = new ArrayList<>();
     private int relatedShown = 10;
     private static final int RELATED_PAGE = 10;
@@ -87,8 +88,8 @@ public class PlayerActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
-        // Giữ màn hình luôn sáng khi đang phát (không tắt màn hình giữa chừng).
-        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Phat nen: KHONG giu man hinh sang nua (de user tat man nghe tieng).
+        // Ban 1.9 giu FLAG_KEEP_SCREEN_ON chong lai viec tat man -> xung dot phat nen.
         playerView = findViewById(R.id.player_view);
         ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
         titleView = findViewById(R.id.player_title);
@@ -132,39 +133,32 @@ public class PlayerActivity extends AppCompatActivity {
             return;
         }
 
-        DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
-                // K016: dem day (15-60s, bat dau khi du 5s) de mang chap chon khong dung hinh.
-                // May 1GB RAM van chiu duoc vi chi dem 360p/480p H.264 nhe.
-                .setBufferDurationsMs(15000, 60000, 5000, 5000)
-                .build();
-
-        DefaultTrackSelector trackSelector = new DefaultTrackSelector(this);
-        trackSelector.setParameters(
-                trackSelector.buildUponParameters()
-                        .setMaxVideoSize(1920, QualityPolicy.MAX_HEIGHT)
-                        .setMaxVideoFrameRate(QualityPolicy.MAX_FPS)
-        );
-
-        player = new ExoPlayer.Builder(this)
-                .setLoadControl(loadControl)
-                .setTrackSelector(trackSelector)
-                .build();
-        // Phat nen khi tat man: giu CPU + audio focus, tat man van co tieng.
-        // K016 Android 5.0: WAKE_MODE_LOCAL giu CPU (API 1), khong can service.
+        // 2.2: player chung trong service (tat man / Activity chet nhac van song).
+        player = PlaybackService.getOrCreatePlayer(this);
+        // Gan lai view moi lan mo man hinh (player song dai hon Activity).
         try {
-            player.setWakeMode(C.WAKE_MODE_LOCAL);
+            player.clearVideoSurface();
         } catch (Exception ignored) {
         }
+        // 2.2: go listener cu truoc khi gan moi (mo lai man hinh nhieu lan
+        // khong bi chong listener gay nhay track / goi play 2 lan).
         try {
-            player.setHandleAudioBecomingNoisy(true);
+            if (playerListener != null) player.removeListener(playerListener);
         } catch (Exception ignored) {
         }
         playerView.setPlayer(player);
         playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
-        // Va nhe chay nen: lay wifi lock truoc khi phat (giu wifi khi tat man).
-        acquireWifiLock();
-        playUrl(url, audioUrl);
+        // 2.2: phat tiep cho dang nho (neu mo lai video cu thi khong dat lai tu dau).
+        currentVideoUrl = url;
+        currentKey = savedPlaybackKey(url);
+        String savedKey = currentKey;
+        long savedPos = readSavedPosition(savedKey);
+        if (savedPos > 5000) {
+            resumePosition = savedPos;
+            resumePlay = true;
+        }
+        playUrlAt(url, audioUrl, resumePosition > 0 ? resumePosition : 0, resumePlay);
         // Ghi dấu video đầu vào lịch phát (để previous/next hoạt động).
         pushTrail(pageUrl != null ? pageUrl : url, vTitle,
                 getIntent().getStringExtra(EXTRA_VIDEO_THUMB),
@@ -172,10 +166,11 @@ public class PlayerActivity extends AppCompatActivity {
                 vUploader);
         // Nối nút next/previous của controller: next = video liên quan đầu,
         // previous = phát lại video trước đó trong lịch phát.
-        player.addListener(new Player.Listener() {
+        final int lockHeight = height;
+        playerListener = new Player.Listener() {
             @Override
             public void onTracksChanged(Tracks tracks) {
-                lockToHeight(tracks, height);
+                lockToHeight(tracks, lockHeight);
             }
 
             @Override
@@ -190,10 +185,14 @@ public class PlayerActivity extends AppCompatActivity {
                     bindControllerPrevNext();
                 }
             }
-        });
+        };
+        player.addListener(playerListener);
         player.prepare();
         player.play();
         bindControllerPrevNext();
+        // Service chay nen: hien thong bao thuong truc -> Android khong giet app
+        // khi tat man. Ban 2.1 quen goi startService nen PlaybackService chet lam.
+        startPlaybackService(vTitle);
 
         // Nút bánh răng: chọn chất lượng + full màn hình (góc phải, API 21).
         fullBtn.setOnClickListener(v -> toggleFullscreen());
@@ -390,9 +389,19 @@ public class PlayerActivity extends AppCompatActivity {
                                 item.thumbUrl, item.durationSec, item.uploader);
                     } catch (Exception ignored) {
                     }
-                    playUrl(urls.get(defIdx), audios.get(defIdx));
-                    player.prepare();
-                    player.play();
+                    // 2.2: luu vi tri video cu truoc khi doi (mo lai tiep tuc dung cho).
+                    try {
+                        if (currentKey != null && !currentKey.isEmpty() && player != null) {
+                            long oldPos = player.getCurrentPosition();
+                            if (oldPos > 5000) savePosition(currentKey, oldPos);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    playUrlAt(urls.get(defIdx), audios.get(defIdx), 0, true);
+                    currentVideoUrl = urls.get(defIdx);
+                    currentKey = savedPlaybackKey(currentVideoUrl);
+                    resumePosition = 0;
+                    startPlaybackService(item.title);
                     relatedShown = RELATED_PAGE;
                     loadRelated(item.videoId);
                     // Cuộn lên đầu để thấy video mới.
@@ -408,20 +417,53 @@ public class PlayerActivity extends AppCompatActivity {
 
     /** Phát 1 URL video; nếu có audio rời thì ghép (videoOnly câm -> có tiếng). */
     private void playUrl(String videoUrl, @Nullable String audio) {
+        playUrlAt(videoUrl, audio, 0, true);
+    }
+
+    /** Phat tu vi tri cho truoc (mo lai video dang nghe do). API 21 OK. */
+    private void playUrlAt(String videoUrl, @Nullable String audio, long startMs, boolean play) {
+        if (videoUrl == null || player == null) return;
         DefaultHttpDataSource.Factory http =
                 new DefaultHttpDataSource.Factory()
                         .setUserAgent("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
         if (audio == null || audio.isEmpty()) {
             player.setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)));
-            return;
+        } else {
+            ProgressiveMediaSource videoSrc = new ProgressiveMediaSource.Factory(http)
+                    .createMediaSource(MediaItem.fromUri(Uri.parse(videoUrl)));
+            ProgressiveMediaSource audioSrc = new ProgressiveMediaSource.Factory(http)
+                    .createMediaSource(MediaItem.fromUri(Uri.parse(audio)));
+            // Ghép hình + tiếng: videoOnly (câm) + audio rời -> có tiếng.
+            MergingMediaSource merged = new MergingMediaSource(videoSrc, audioSrc);
+            player.setMediaSource(merged);
         }
-        ProgressiveMediaSource videoSrc = new ProgressiveMediaSource.Factory(http)
-                .createMediaSource(MediaItem.fromUri(Uri.parse(videoUrl)));
-        ProgressiveMediaSource audioSrc = new ProgressiveMediaSource.Factory(http)
-                .createMediaSource(MediaItem.fromUri(Uri.parse(audio)));
-        // Ghép hình + tiếng: videoOnly (câm) + audio rời -> có tiếng.
-        MergingMediaSource merged = new MergingMediaSource(videoSrc, audioSrc);
-        player.setMediaSource(merged);
+        player.prepare();
+        if (startMs > 5000) {
+            try {
+                player.seekTo(startMs);
+            } catch (Exception ignored) {
+            }
+        }
+        if (play) player.play();
+    }
+
+    private static String savedPlaybackKey(String url) {
+        return "pos_" + (url != null ? url.hashCode() : 0);
+    }
+
+    private long readSavedPosition(String key) {
+        try {
+            return getSharedPreferences("playback", MODE_PRIVATE).getLong(key, 0);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void savePosition(String key, long pos) {
+        try {
+            getSharedPreferences("playback", MODE_PRIVATE).edit().putLong(key, pos).apply();
+        } catch (Exception ignored) {
+        }
     }
 
     /** Dialog chọn độ phân giải (mỗi mức mang audio riêng, giữ vị trí khi đổi). */
@@ -437,12 +479,11 @@ public class PlayerActivity extends AppCompatActivity {
                     currentIndex = which;
                     String a = (which < allAudios.size()) ? allAudios.get(which) : null;
                     audioUrl = a;
+                    // 2.2: playUrlAt da prepare + seek + play san, khong goi thua
+                    // (ban cu goi prepare/seek 2 lan gay load lai nhu loi fullscreen).
                     long pos = player != null ? player.getCurrentPosition() : 0;
                     boolean wasPlaying = player != null && player.isPlaying();
-                    playUrl(allUrls.get(which), a);
-                    player.prepare();
-                    player.seekTo(pos);
-                    if (wasPlaying) player.play();
+                    playUrlAt(allUrls.get(which), a, pos, wasPlaying);
                     dialog.dismiss();
                 })
                 .show();
@@ -649,12 +690,14 @@ public class PlayerActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         // Phat nen: KHONG pause khi tat man / chuyen app.
-        // Player da giu PARTIAL_WAKE_LOCK (setWakeMode) nen tat man van co tieng.
-        // Nho vi tri lien tuc de bi giet process mo lai thi tiep tuc, khong tu dau.
+        // Luu vi tri vao RAM + disk lien tuc de mo lai tiep tuc, khong tu dau.
         if (player != null) {
             try {
                 resumePosition = player.getCurrentPosition();
                 resumePlay = player.isPlaying();
+                if (currentKey != null && !currentKey.isEmpty() && resumePosition > 5000) {
+                    savePosition(currentKey, resumePosition);
+                }
             } catch (Exception ignored) {
             }
         }
@@ -663,8 +706,12 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Mo lai (sau tat man / chuyen app): giu wifi lock + tiep tuc dung cho nho.
-        acquireWifiLock();
+        // 2.2: service giu CPU + wifi lock roi, Activity khong giu rieng nua.
+        // Mo lai (sau tat man / chuyen app / bam thong bao): gan view + tiep tuc.
+        try {
+            if (player != null && playerView != null) playerView.setPlayer(player);
+        } catch (Exception ignored) {
+        }
         if (player != null && resumePosition > 0) {
             try {
                 long cur = player.getCurrentPosition();
@@ -676,27 +723,14 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
-    /** Giu wifi khi tat man (API 21 OK). WAKE_MODE_LOCAL chi giu CPU, khong giu wifi. */
-    private void acquireWifiLock() {
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // 2.2: bam thong bao mo lai (singleTop) KHONG tao player moi -> khong mat nhac.
         try {
-            if (wifiLock == null) {
-                android.net.wifi.WifiManager wm =
-                        (android.net.wifi.WifiManager) getApplicationContext()
-                                .getSystemService(android.content.Context.WIFI_SERVICE);
-                if (wm != null) {
-                    wifiLock = wm.createWifiLock(
-                            android.net.wifi.WifiManager.WIFI_MODE_FULL, "YoutubeLite:play");
-                    wifiLock.setReferenceCounted(false);
-                }
-            }
-            if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void releaseWifiLock() {
-        try {
-            if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+            setIntent(intent);
+            if (playerView != null && player != null) playerView.setPlayer(player);
+            if (player != null && !player.isPlaying() && resumePlay) player.play();
         } catch (Exception ignored) {
         }
     }
@@ -704,14 +738,53 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        releaseWifiLock();
+        // 2.2: KHONG tha player o day nua (player chung cua service, man hinh
+        // chet nhac van song). Chi go view + listener de tranh leak.
+        // Luu vi tri lan cuoi vao disk de mo lai tiep tuc.
+        try {
+            if (player != null) {
+                long pos = player.getCurrentPosition();
+                if (currentKey != null && !currentKey.isEmpty() && pos > 5000) {
+                    savePosition(currentKey, pos);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            if (player != null && playerListener != null) player.removeListener(playerListener);
+        } catch (Exception ignored) {
+        }
+        try {
+            if (playerView != null) playerView.setPlayer(null);
+        } catch (Exception ignored) {
+        }
+        // Thoat MAN HINH bang nut back = user khong nghe nua -> tat service + thong bao.
+        // Luu y: tat man / chuyen app KHONG vao day (chi onPause/onStop) nen nhac van tiep tuc.
+        // singleTop + bam thong bao mo lai cung KHONG vao day.
+        if (isFinishing()) {
+            try {
+                stopService(new android.content.Intent(this, PlaybackService.class));
+            } catch (Exception ignored) {
+            }
+            try {
+                PlaybackService.releasePlayer();
+            } catch (Exception ignored) {
+            }
+        }
         if (brightHandler != null) {
             brightHandler.removeCallbacks(brightTask);
             brightHandler = null;
         }
-        if (player != null) {
-            player.release();
-            player = null;
+        player = null;
+    }
+
+    /** Bat service chay nen (foreground + thong bao) de tat man khong bi giet. */
+    private void startPlaybackService(String title) {
+        try {
+            android.content.Intent si = new android.content.Intent(this, PlaybackService.class);
+            if (title != null) si.putExtra(PlaybackService.EXTRA_TITLE, title);
+            startService(si);
+        } catch (Exception ignored) {
         }
     }
 }

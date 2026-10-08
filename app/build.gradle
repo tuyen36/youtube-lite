@@ -11,8 +11,8 @@ android {
         // May phu cu: ho tro tu Android 5.0 (Lollipop, API 21)
         minSdk 21
         targetSdk 34
-        versionCode 12
-        versionName "2.1"
+        versionCode 13
+        versionName "2.2"
 
         // Asus FonePad 8 K016 dùng chip Intel Atom Z3560 (x86), không phải ARM:
         // phải build cả x86 lẫn armeabi-v7a thì máy Intel mới mở được app.
