@@ -69,6 +69,11 @@ public class PlayerActivity extends AppCompatActivity {
     private TextView relatedState;
     private LinearLayout relatedContainer;
     private Button relatedMoreBtn;
+    // Va nhe chay nen: wifi lock giu wifi khi tat man (WAKE_MODE_LOCAL chi giu CPU,
+    // khong giu wifi -> buffer can la dung). Nho vi tri de mo lai tiep tuc, khong tu dau.
+    private android.net.wifi.WifiManager.WifiLock wifiLock;
+    private long resumePosition = 0;
+    private boolean resumePlay = true;
     private final List<SearchActivity.VideoItem> relatedFull = new ArrayList<>();
     private int relatedShown = 10;
     private static final int RELATED_PAGE = 10;
@@ -157,6 +162,8 @@ public class PlayerActivity extends AppCompatActivity {
         playerView.setPlayer(player);
         playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
+        // Va nhe chay nen: lay wifi lock truoc khi phat (giu wifi khi tat man).
+        acquireWifiLock();
         playUrl(url, audioUrl);
         // Ghi dấu video đầu vào lịch phát (để previous/next hoạt động).
         pushTrail(pageUrl != null ? pageUrl : url, vTitle,
@@ -643,12 +650,61 @@ public class PlayerActivity extends AppCompatActivity {
         super.onPause();
         // Phat nen: KHONG pause khi tat man / chuyen app.
         // Player da giu PARTIAL_WAKE_LOCK (setWakeMode) nen tat man van co tieng.
-        // Chi dung khi user bam pause tren controller hoac thoat (onDestroy).
+        // Nho vi tri lien tuc de bi giet process mo lai thi tiep tuc, khong tu dau.
+        if (player != null) {
+            try {
+                resumePosition = player.getCurrentPosition();
+                resumePlay = player.isPlaying();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Mo lai (sau tat man / chuyen app): giu wifi lock + tiep tuc dung cho nho.
+        acquireWifiLock();
+        if (player != null && resumePosition > 0) {
+            try {
+                long cur = player.getCurrentPosition();
+                // Chi seek khi lech qua 3s (tranh seek thua gay load lai nhu loi fullscreen cu).
+                if (Math.abs(cur - resumePosition) > 3000) player.seekTo(resumePosition);
+                if (resumePlay) player.play();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** Giu wifi khi tat man (API 21 OK). WAKE_MODE_LOCAL chi giu CPU, khong giu wifi. */
+    private void acquireWifiLock() {
+        try {
+            if (wifiLock == null) {
+                android.net.wifi.WifiManager wm =
+                        (android.net.wifi.WifiManager) getApplicationContext()
+                                .getSystemService(android.content.Context.WIFI_SERVICE);
+                if (wm != null) {
+                    wifiLock = wm.createWifiLock(
+                            android.net.wifi.WifiManager.WIFI_MODE_FULL, "YoutubeLite:play");
+                    wifiLock.setReferenceCounted(false);
+                }
+            }
+            if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void releaseWifiLock() {
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        releaseWifiLock();
         if (brightHandler != null) {
             brightHandler.removeCallbacks(brightTask);
             brightHandler = null;
