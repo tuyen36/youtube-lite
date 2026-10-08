@@ -31,12 +31,13 @@ public class PlaybackService extends Service {
     private android.os.PowerManager.WakeLock cpuLock;
     private android.net.wifi.WifiManager.WifiLock wifiLock;
 
-    /** Lay player chung, tao moi neu chua co (cau hinh san cho K016). */
+    /** Lay player chung, tao moi neu chua co (cau hinh san cho K016).
+     * 2.3: dem sau (15s-120s) de tat man 5 phut van con nhac + tu phat lai khi loi. */
     public static synchronized ExoPlayer getOrCreatePlayer(Context ctx) {
         if (sharedPlayer == null) {
             Context app = ctx.getApplicationContext();
             DefaultLoadControl lc = new DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(15000, 60000, 5000, 5000)
+                    .setBufferDurationsMs(15000, 120000, 5000, 5000)
                     .build();
             DefaultTrackSelector ts = new DefaultTrackSelector(app);
             try {
@@ -116,15 +117,38 @@ public class PlaybackService extends Service {
             if (wifiLock == null) {
                 Object wmObj = getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 if (wmObj instanceof android.net.wifi.WifiManager) {
+                    // 2.3: HIGH_PERF giu wifi chay het toc do khi tat man (FULL van ngu).
+                    int mode = android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF;
                     wifiLock = ((android.net.wifi.WifiManager) wmObj).createWifiLock(
-                            android.net.wifi.WifiManager.WIFI_MODE_FULL, "YoutubeLite:wifi");
+                            mode, "YoutubeLite:wifi");
                     wifiLock.setReferenceCounted(false);
                 }
             }
             if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
         } catch (Exception ignored) {
         }
+        // 2.3: dang phat ma loi (het dem / rot mang khi tat man) -> tu phat lai.
+        try {
+            if (sharedPlayer != null) {
+                sharedPlayer.addListener(retryListener);
+            }
+        } catch (Exception ignored) {
+        }
     }
+
+    private final androidx.media3.common.Player.Listener retryListener =
+            new androidx.media3.common.Player.Listener() {
+                @Override
+                public void onPlayerError(androidx.media3.common.PlaybackException error) {
+                    // Mang rot khi tat man: prepare + play lai, khong de dung luon.
+                    try {
+                        if (sharedPlayer == null) return;
+                        sharedPlayer.prepare();
+                        sharedPlayer.play();
+                    } catch (Exception ignored) {
+                    }
+                }
+            };
 
     private void releaseLocks() {
         try {

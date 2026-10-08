@@ -149,21 +149,41 @@ public class PlayerActivity extends AppCompatActivity {
         playerView.setPlayer(player);
         playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
-        // 2.2: phat tiep cho dang nho (neu mo lai video cu thi khong dat lai tu dau).
+        // 2.3: neu player dang phat dung video nay roi (bam thong bao mo lai,
+        // tat man mo lai) thi KHONG dat lai link — setMediaSource moi xa buffer
+        // + link progressive het han nhanh -> dung luon. Chi gan view + phat tiep.
         currentVideoUrl = url;
         currentKey = savedPlaybackKey(url);
-        String savedKey = currentKey;
-        long savedPos = readSavedPosition(savedKey);
-        if (savedPos > 5000) {
-            resumePosition = savedPos;
-            resumePlay = true;
+        boolean sameVideoPlaying = false;
+        try {
+            sameVideoPlaying = player.getPlaybackState() != Player.STATE_IDLE
+                    && player.getCurrentPosition() > 5000;
+        } catch (Exception ignored) {
         }
-        playUrlAt(url, audioUrl, resumePosition > 0 ? resumePosition : 0, resumePlay);
+        if (!sameVideoPlaying) {
+            // Mo video moi (hoac player chua co gi): phat tiep cho dang nho.
+            String savedKey = currentKey;
+            long savedPos = readSavedPosition(savedKey);
+            if (savedPos > 5000) {
+                resumePosition = savedPos;
+                resumePlay = true;
+            }
+            playUrlAt(url, audioUrl, resumePosition > 0 ? resumePosition : 0, resumePlay);
+        } else {
+            // Mo lai video dang phat: giu nguyen buffer, chi phat tiep.
+            resumePosition = 0;
+            try {
+                if (!player.isPlaying()) player.play();
+            } catch (Exception ignored) {
+            }
+        }
         // Ghi dấu video đầu vào lịch phát (để previous/next hoạt động).
         pushTrail(pageUrl != null ? pageUrl : url, vTitle,
                 getIntent().getStringExtra(EXTRA_VIDEO_THUMB),
                 getIntent().getLongExtra(EXTRA_VIDEO_DURATION, -1),
                 vUploader);
+        // 2.3: luu vi tri dinh ky 10s vao disk (tat man lau bi giet mo lai van tiep tuc).
+        startPositionSaver();
         // Nối nút next/previous của controller: next = video liên quan đầu,
         // previous = phát lại video trước đó trong lịch phát.
         final int lockHeight = height;
@@ -187,8 +207,12 @@ public class PlayerActivity extends AppCompatActivity {
             }
         };
         player.addListener(playerListener);
-        player.prepare();
-        player.play();
+        // 2.3: chi prepare/play khi mo video moi. Mo lai video dang phat
+        // (sameVideoPlaying) thi giu nguyen buffer, khong prepare lai.
+        if (!sameVideoPlaying) {
+            player.prepare();
+            player.play();
+        }
         bindControllerPrevNext();
         // Service chay nen: hien thong bao thuong truc -> Android khong giet app
         // khi tat man. Ban 2.1 quen goi startService nen PlaybackService chet lam.
@@ -578,6 +602,40 @@ public class PlayerActivity extends AppCompatActivity {
         }
     };
 
+    // 2.3: luu vi tri dinh ky 10s vao disk (tat man lau bi giet mo lai van tiep tuc).
+    private android.os.Handler saverHandler;
+    private final Runnable saverTask = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (player != null && currentKey != null && !currentKey.isEmpty()) {
+                    long pos = player.getCurrentPosition();
+                    if (pos > 5000) savePosition(currentKey, pos);
+                }
+            } catch (Exception ignored) {
+            }
+            if (saverHandler != null) saverHandler.postDelayed(this, 10000);
+        }
+    };
+
+    private void startPositionSaver() {
+        try {
+            if (saverHandler == null) {
+                saverHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            }
+            saverHandler.removeCallbacks(saverTask);
+            saverHandler.post(saverTask);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void stopPositionSaver() {
+        try {
+            if (saverHandler != null) saverHandler.removeCallbacks(saverTask);
+        } catch (Exception ignored) {
+        }
+    }
+
     private void bindControllerPrevNext() {
         try {
             playerView.setShowPreviousButton(true);
@@ -706,20 +764,18 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 2.2: service giu CPU + wifi lock roi, Activity khong giu rieng nua.
-        // Mo lai (sau tat man / chuyen app / bam thong bao): gan view + tiep tuc.
+        // 2.3: mo man hinh len KHONG seek nguoc (loi 2.2: tua ve cho tat man
+        // trong khi nhac van chay nen -> dung hinh). Chi gan view + phat tiep.
         try {
             if (player != null && playerView != null) playerView.setPlayer(player);
         } catch (Exception ignored) {
         }
-        if (player != null && resumePosition > 0) {
-            try {
-                long cur = player.getCurrentPosition();
-                // Chi seek khi lech qua 3s (tranh seek thua gay load lai nhu loi fullscreen cu).
-                if (Math.abs(cur - resumePosition) > 3000) player.seekTo(resumePosition);
-                if (resumePlay) player.play();
-            } catch (Exception ignored) {
+        try {
+            if (player != null && !player.isPlaying() && resumePlay
+                    && player.getPlaybackState() != Player.STATE_ENDED) {
+                player.play();
             }
+        } catch (Exception ignored) {
         }
     }
 
@@ -775,6 +831,7 @@ public class PlayerActivity extends AppCompatActivity {
             brightHandler.removeCallbacks(brightTask);
             brightHandler = null;
         }
+        stopPositionSaver();
         player = null;
     }
 
