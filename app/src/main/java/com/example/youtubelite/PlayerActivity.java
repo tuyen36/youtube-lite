@@ -205,6 +205,11 @@ public class PlayerActivity extends AppCompatActivity {
                 if (playbackState == Player.STATE_READY) {
                     bindControllerPrevNext();
                 }
+                // 2.5: het video -> tu dong next sang video lien quan dau (giong autoplay).
+                // Tat man van next duoc vi player chung trong service van chay.
+                if (playbackState == Player.STATE_ENDED) {
+                    playNext();
+                }
             }
         };
         player.addListener(playerListener);
@@ -700,8 +705,13 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
-    /** Nút next: phát video liên quan đầu (video đầu trong list liên quan). */
+    /** Nút next + tu dong next khi het video: phat video lien quan dau.
+     * 2.5: chong next trung (ENDED ban 2 lan) + xoa vi tri luu cua video cu
+     * de mo lai khong tua ve cho cu. Tat man van next duoc vi chay nen. */
+    private boolean autoNexting = false;
+
     private void playNext() {
+        if (autoNexting) return;
         // Quay lại từ lịch phát (đã bấm previous rồi bấm next).
         if (trailIndex >= 0 && trailIndex + 1 < playTrail.size()) {
             trailIndex++;
@@ -711,9 +721,47 @@ public class PlayerActivity extends AppCompatActivity {
         }
         if (!relatedFull.isEmpty()) {
             // Video đầu trong danh sách đề xuất đang phát (giống YouTube autoplay).
-            switchToRelated(relatedFull.get(0));
+            // Loai video dang phat de khong lap lai.
+            SearchActivity.VideoItem next = null;
+            for (SearchActivity.VideoItem cand : relatedFull) {
+                if (cand != null && cand.videoId != null
+                        && !cand.videoId.equals(pageUrl)) {
+                    next = cand;
+                    break;
+                }
+            }
+            if (next == null) next = relatedFull.get(0);
+            // Xoa vi tri luu cua video cu de khong tua ve cho cu khi mo lai.
+            try {
+                if (currentKey != null && !currentKey.isEmpty()) {
+                    getSharedPreferences("playback", MODE_PRIVATE)
+                            .edit().remove(currentKey).apply();
+                }
+            } catch (Exception ignored) {
+            }
+            resumePosition = 0;
+            autoNexting = true;
+            try {
+                Toast.makeText(this,
+                        "Het video - tu dong phat tiep: " + next.title,
+                        Toast.LENGTH_SHORT).show();
+            } catch (Exception ignored) {
+            }
+            switchToRelated(next);
+            try {
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                autoNexting = false;
+                            }
+                        }, 5000);
+            } catch (Exception ignored) {
+                autoNexting = false;
+            }
         } else if (player != null) {
-            Toast.makeText(this, "Chưa có video liên quan để phát tiếp", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Het video - chua co video lien quan de phat tiep",
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
