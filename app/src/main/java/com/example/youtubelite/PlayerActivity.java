@@ -128,7 +128,9 @@ public class PlayerActivity extends AppCompatActivity {
         }
 
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(5000, 15000, 2500, 2500)
+                // K016: dem day (15-60s, bat dau khi du 5s) de mang chap chon khong dung hinh.
+                // May 1GB RAM van chiu duoc vi chi dem 360p/480p H.264 nhe.
+                .setBufferDurationsMs(15000, 60000, 5000, 5000)
                 .build();
 
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(this);
@@ -362,10 +364,7 @@ public class PlayerActivity extends AppCompatActivity {
                         Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    int defIdx = 0;
-                    for (int k = 0; k < labels.size(); k++) {
-                        if (labels.get(k).startsWith("480p")) { defIdx = k; break; }
-                    }
+                    int defIdx = pickDefaultIndex(labels);
                     // Đổi video ngay trong màn hình này: tiêu đề + meta + related mới.
                     allUrls = urls;
                     allLabels = labels;
@@ -622,6 +621,21 @@ public class PlayerActivity extends AppCompatActivity {
     private void lockToHeight(Tracks tracks, int wantHeight) {
         // Gợi ý track selector giữ nguyên giới hạn; ExoPlayer adaptive sẽ
         // tự chọn trong trần 1080p/30fps đã đặt ở onCreate.
+    }
+
+    /** Chon mac dinh cho K016: 360p co tieng truoc, roi 360p, roi 480p. */
+    static int pickDefaultIndex(List<String> labels) {
+        for (int k = 0; k < labels.size(); k++) {
+            if (labels.get(k).startsWith("360p")
+                    && labels.get(k).indexOf(0x266A) >= 0) return k;
+        }
+        for (int k = 0; k < labels.size(); k++) {
+            if (labels.get(k).startsWith("360p")) return k;
+        }
+        for (int k = 0; k < labels.size(); k++) {
+            if (labels.get(k).startsWith("480p")) return k;
+        }
+        return 0;
     }
 
     @Override

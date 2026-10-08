@@ -134,20 +134,17 @@ public class SearchActivity extends AppCompatActivity {
                             Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                             return;
                         }
-                        // Mặc định: 480p nếu có, không thì mức đầu (cao nhất còn lại).
-                        int defIdx = 0;
-                        for (int k = 0; k < allLabels.size(); k++) {
-                            if (allLabels.get(k).startsWith("480p")) { defIdx = k; break; }
-                        }
+                        // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
+                        int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
                         String a0 = allAudios.get(defIdx);
                         // Lấy height từ label "720p" để hiện đúng.
-                        int h0 = 480;
+                        int h0 = 360;
                         try {
                             String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
                             if (d.length() > 4) d = d.substring(0, 4);
                             h0 = Integer.parseInt(d);
                         } catch (Exception ignored) {
-                            h0 = 480;
+                            h0 = 360;
                         }
                         openPlayer(item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios);
                     });

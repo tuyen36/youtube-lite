@@ -182,14 +182,20 @@ public class HistoryActivity extends AppCompatActivity {
                         Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    int defIdx = 0;
-                    for (int k = 0; k < allLabels.size(); k++) {
-                        if (allLabels.get(k).startsWith("480p")) { defIdx = k; break; }
-                    }
+                    // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
+                    int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
                     SearchActivity.VideoItem item = new SearchActivity.VideoItem(
                             e.url, e.title, new ArrayList<>(), e.thumbUrl, e.durationSec, e.uploader);
+                    int h0 = 360;
+                    try {
+                        String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
+                        if (d.length() > 4) d = d.substring(0, 4);
+                        h0 = Integer.parseInt(d);
+                    } catch (Exception ignored) {
+                        h0 = 360;
+                    }
                     SearchActivity.openPlayer(this, item,
-                            allUrls.get(defIdx), 480, allAudios.get(defIdx),
+                            allUrls.get(defIdx), h0, allAudios.get(defIdx),
                             allUrls, allLabels, allAudios);
                 });
             } catch (Exception ex) {

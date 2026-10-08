@@ -1,6 +1,6 @@
 // Test logic QualityPolicy (ban JS giu y nhu ban Java) — chay ngay tren LUNA36.
 // Cach chay: node test-quality-policy.js
-// Kiem tra: tran 1080p, tat 60fps, uu tien H.264 + progressive, mac dinh 480p.
+// Kiem tra: tran 1080p, tat 60fps, loai VP9/AV1 videoOnly, mac dinh 360p K016.
 
 const MAX_HEIGHT = 1080;
 const MAX_FPS = 30;
@@ -14,8 +14,11 @@ function codecRank(codec) {
   return 3;
 }
 
+function isAvc(codec) { return !!codec && codec.toLowerCase().includes('avc'); }
+
 function filter(input) {
-  const ok = input.filter(s => s.height <= MAX_HEIGHT && s.fps <= MAX_FPS);
+  const ok = input.filter(s => s.height <= MAX_HEIGHT && s.fps <= MAX_FPS
+    && (s.isProgressive || isAvc(s.codec))); // K016: videoOnly chi nhan H.264
   ok.sort((a, b) => {
     if (a.isProgressive !== b.isProgressive) return a.isProgressive ? -1 : 1;
     const ca = codecRank(a.codec), cb = codecRank(b.codec);
@@ -27,6 +30,10 @@ function filter(input) {
 
 function pickDefault(filtered) {
   if (!filtered.length) return null;
+  const p360prog = filtered.find(s => s.height === 360 && s.isProgressive);
+  if (p360prog) return p360prog;
+  const p360 = filtered.find(s => s.height === 360);
+  if (p360) return p360;
   const p480 = filtered.find(s => s.height === 480);
   return p480 || filtered[filtered.length - 1];
 }
@@ -57,8 +64,9 @@ function check(name, cond) {
 check('loai 2160p + 1440p (qua tran 1080p)', !ok.some(s => s.height > 1080));
 check('tat 60fps (khong con fps>30)', !ok.some(s => s.fps > 30));
 check('con 1080p30 de xem toi da', ok.some(s => s.height === 1080 && s.fps === 30));
-check('mac dinh 480p cho may phu', pickDefault(ok)?.height === 480);
+check('mac dinh 360p cho K016', pickDefault(ok)?.height === 360);
 check('uu tien progressive + H.264 len dau', ok[0].isProgressive === true);
+check('loai VP9 videoOnly (K016 giat)', !ok.some(s => !s.isProgressive && !isAvc(s.codec)));
 
 // case xau nhat: video chi co 4K/60fps -> tra rong, app bao Toast
 const onlyBad = filter([
