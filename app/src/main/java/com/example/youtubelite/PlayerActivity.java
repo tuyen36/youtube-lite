@@ -26,6 +26,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.common.C;
 
 import com.bumptech.glide.Glide;
 
@@ -141,6 +142,16 @@ public class PlayerActivity extends AppCompatActivity {
                 .setLoadControl(loadControl)
                 .setTrackSelector(trackSelector)
                 .build();
+        // Phat nen khi tat man: giu CPU + audio focus, tat man van co tieng.
+        // K016 Android 5.0: WAKE_MODE_LOCAL giu CPU (API 1), khong can service.
+        try {
+            player.setWakeMode(C.WAKE_MODE_LOCAL);
+        } catch (Exception ignored) {
+        }
+        try {
+            player.setHandleAudioBecomingNoisy(true);
+        } catch (Exception ignored) {
+        }
         playerView.setPlayer(player);
         playerView.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
@@ -616,7 +627,9 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (player != null) player.pause();
+        // Phat nen: KHONG pause khi tat man / chuyen app.
+        // Player da giu PARTIAL_WAKE_LOCK (setWakeMode) nen tat man van co tieng.
+        // Chi dung khi user bam pause tren controller hoac thoat (onDestroy).
     }
 
     @Override
