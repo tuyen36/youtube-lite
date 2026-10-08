@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="#111"
     android:padding="12dp">
 
     <LinearLayout
@@ -17,7 +18,9 @@
             android:layout_weight="1"
             android:hint="Tìm kiếm YouTube..."
             android:inputType="text"
-            android:maxLines="1" />
+            android:maxLines="1"
+            android:textColor="#FFF"
+            android:textColorHint="#888" />
 
         <Button
             android:id="@+id/search_btn"
