@@ -178,6 +178,10 @@ public class PlayerActivity extends AppCompatActivity {
                 resumePosition = savedPos;
                 resumePlay = true;
             }
+            // 2.10: dong bo currentIndex voi URL dang phat de hop chat luong
+            // tro dung muc hien tai (thay vi mac dinh 360p).
+            currentIndex = indexOfUrl(allUrls, url);
+            if (currentIndex < 0) currentIndex = 0;
             playUrlAt(url, audioUrl, resumePosition > 0 ? resumePosition : 0, resumePlay);
         } else {
             // Mo lai video dang phat: giu nguyen buffer, chi phat tiep.
@@ -521,6 +525,15 @@ public class PlayerActivity extends AppCompatActivity {
 
     private static String savedPlaybackKey(String url) {
         return "pos_" + (url != null ? url.hashCode() : 0);
+    }
+
+    /** Tim muc dang phat trong danh sach de hop chat luong tro dung cho (2.10). */
+    private static int indexOfUrl(List<String> urls, String url) {
+        if (urls == null || url == null) return -1;
+        for (int i = 0; i < urls.size(); i++) {
+            if (url.equals(urls.get(i))) return i;
+        }
+        return -1;
     }
 
     private long readSavedPosition(String key) {
