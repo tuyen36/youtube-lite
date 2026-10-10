@@ -93,9 +93,30 @@ public class HomeActivity extends AppCompatActivity {
             renderSuggest();
         });
 
+        // Muc 6 UI/UX: keo gan het tu tai them (do phai bam Xem them o day list).
+        try {
+            if (homeScroll != null) {
+                homeScroll.getViewTreeObserver().addOnScrollChangedListener(() -> {
+                    try {
+                        android.view.View child = homeScroll.getChildAt(0);
+                        if (child == null) return;
+                        int diff = child.getBottom() - (homeScroll.getHeight() + homeScroll.getScrollY());
+                        if (diff <= 600 && suggestShown < suggestFull.size()) {
+                            suggestShown += PAGE;
+                            renderSuggest();
+                        }
+                    } catch (Exception ignored) {
+                    }
+                });
+            }
+        } catch (Exception ignored) {
+        }
+
         suggestTitle.setText("Gợi ý cho bạn");
         renderSearchHistory();
         loadSuggest();
+        // Muc 2 UI/UX: thanh dieu huong chung duoi cung.
+        NavBar.bind(this);
     }
 
     private void doSearchFromHome() {
@@ -111,40 +132,19 @@ public class HomeActivity extends AppCompatActivity {
         startActivity(i);
     }
 
-    /** Vẽ các từ khóa đã tìm: bấm để tìm lại, giữ lâu để xóa. */
+    /** Vẽ các từ khóa đã tìm: bấm để tìm lại, giữ lâu để xóa (chip tối, Muc 4 UI/UX). */
     private void renderSearchHistory() {
         if (historyContainer == null) return;
-        List<String> queries = SearchHistory.list(this);
-        historyContainer.removeAllViews();
-        if (queries.isEmpty()) {
-            if (historyTitle != null) historyTitle.setVisibility(View.GONE);
-            if (historyScroll != null) historyScroll.setVisibility(View.GONE);
-            return;
-        }
-        if (historyTitle != null) historyTitle.setVisibility(View.VISIBLE);
-        if (historyScroll != null) historyScroll.setVisibility(View.VISIBLE);
-        for (String q : queries) {
-            android.widget.Button b = new android.widget.Button(this);
-            b.setText(q);
-            b.setTextSize(12);
-            b.setAllCaps(false);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.setMargins(0, 0, 12, 0);
-            b.setLayoutParams(lp);
-            b.setOnClickListener(v -> {
-                queryInput.setText(q);
-                doSearchFromHome();
-            });
-            b.setOnLongClickListener(v -> {
-                SearchHistory.remove(this, q);
-                renderSearchHistory();
-                Toast.makeText(this, "Đã xóa: " + q, Toast.LENGTH_SHORT).show();
-                return true;
-            });
-            historyContainer.addView(b);
-        }
+        ChipHelper.renderHistoryChips(this, historyContainer, historyTitle, historyScroll,
+                q -> {
+                    queryInput.setText(q);
+                    doSearchFromHome();
+                },
+                q -> {
+                    SearchHistory.remove(this, q);
+                    renderSearchHistory();
+                    ChipHelper.toastDeleted(this, q);
+                });
     }
 
     @Override
@@ -159,6 +159,8 @@ public class HomeActivity extends AppCompatActivity {
         suggestState.setText("Đang tải gợi ý...");
         suggestState.setVisibility(View.VISIBLE);
         suggestMoreBtn.setVisibility(View.GONE);
+        // Muc 5 UI/UX: vong xoay khi tai, loi co nut Thu lai.
+        StateHelper.showLoading(this);
         new Thread(() -> {
             HomeSuggest.Bundle bundle = HomeSuggest.load(this);
             runOnUiThread(() -> {
@@ -168,11 +170,19 @@ public class HomeActivity extends AppCompatActivity {
                 suggestShown = PAGE;
                 renderSuggest();
                 if (suggestFull.isEmpty()) {
-                    suggestState.setText(bundle.relatedError.isEmpty()
-                            ? "Xem vài video để có gợi ý riêng" : "Lỗi: " + bundle.relatedError);
+                    String msg = bundle.relatedError.isEmpty()
+                            ? "Xem vài video để có gợi ý riêng" : "Lỗi: " + bundle.relatedError;
+                    suggestState.setText(msg);
                     suggestState.setVisibility(View.VISIBLE);
+                    // Co loi mang that thi hien nut Thu lai, chua xem gi thi thoi.
+                    if (!bundle.relatedError.isEmpty()) {
+                        StateHelper.showError(this, msg, this::loadSuggest);
+                    } else {
+                        StateHelper.showContent(this);
+                    }
                 } else {
                     suggestState.setVisibility(View.GONE);
+                    StateHelper.showContent(this);
                 }
             });
         }).start();
@@ -212,6 +222,18 @@ public class HomeActivity extends AppCompatActivity {
                 Glide.with(this).load(item.thumbUrl).centerCrop().into(thumb);
             } else {
                 thumb.setImageResource(android.R.color.darker_gray);
+            }
+            // Muc 1 UI/UX: nut Xem kenh rieng trong tung dong goi y.
+            TextView channelLink = row.findViewById(R.id.video_channel_link);
+            if (channelLink != null) {
+                if (item.uploaderUrl != null && !item.uploaderUrl.isEmpty()) {
+                    channelLink.setVisibility(View.VISIBLE);
+                    channelLink.setOnClickListener(v ->
+                            ChannelActivity.open(this, item.uploaderUrl, item.uploader));
+                } else {
+                    channelLink.setVisibility(View.GONE);
+                    channelLink.setOnClickListener(null);
+                }
             }
             row.setOnClickListener(v -> openVideo(item));
             container.addView(row);

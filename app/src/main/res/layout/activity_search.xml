@@ -62,4 +62,37 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <!-- Muc 5 UI/UX: trang thai tai/loi/thu lai (nam tren thanh dieu huong) -->
+    <ProgressBar
+        android:id="@+id/state_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/state_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#FF8A80"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/state_retry"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:text="Thử lại"
+        android:visibility="gone" />
+
+    <!-- Muc 2 UI/UX: thanh dieu huong chung -->
+    <include
+        android:id="@+id/nav_bar_container"
+        layout="@layout/nav_bar" />
+
 </LinearLayout>

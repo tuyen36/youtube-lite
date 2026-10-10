@@ -58,6 +58,8 @@ public class SettingsActivity extends AppCompatActivity {
         q1080Btn.setOnClickListener(v -> setQuality(1080));
 
         refreshViews();
+        // Muc 2 UI/UX: thanh dieu huong chung duoi cung.
+        NavBar.bind(this);
     }
 
     @Override

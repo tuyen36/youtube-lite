@@ -64,6 +64,8 @@ public class HistoryActivity extends AppCompatActivity {
                     .show();
         });
         closeBtn.setOnClickListener(v -> finish());
+        // Muc 2 UI/UX: thanh dieu huong chung duoi cung.
+        NavBar.bind(this);
     }
 
     @Override
@@ -106,6 +108,18 @@ public class HistoryActivity extends AppCompatActivity {
             }
             meta.setText(m.toString());
             meta.setVisibility(m.length() == 0 ? View.GONE : View.VISIBLE);
+            // Muc 1 UI/UX: nut Xem kenh rieng (trang Da xem co link kenh tu 2.12).
+            TextView channelLink = row.findViewById(R.id.video_channel_link);
+            if (channelLink != null) {
+                if (e.uploaderUrl != null && !e.uploaderUrl.isEmpty()) {
+                    channelLink.setVisibility(View.VISIBLE);
+                    channelLink.setOnClickListener(v ->
+                            ChannelActivity.open(this, e.uploaderUrl, e.uploader));
+                } else {
+                    channelLink.setVisibility(View.GONE);
+                    channelLink.setOnClickListener(null);
+                }
+            }
             String dur = durationLabel(e.durationSec);
             duration.setText(dur);
             duration.setVisibility(dur.isEmpty() ? View.GONE : View.VISIBLE);

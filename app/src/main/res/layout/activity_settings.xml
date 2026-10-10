@@ -161,4 +161,9 @@
         android:textSize="12sp"
         android:text="Đang dùng: 360p" />
 
+    <!-- Muc 2 UI/UX: thanh dieu huong chung -->
+    <include
+        android:id="@+id/nav_bar_container"
+        layout="@layout/nav_bar" />
+
 </LinearLayout>

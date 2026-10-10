@@ -27,24 +27,38 @@ public final class WatchHistory {
         public final long durationSec;
         public final String uploader;
         public final long watchedAt;
+        public final String uploaderUrl; // Muc 1 UI/UX: nut Xem kenh o trang Da xem
 
         public Entry(String url, String title, String thumbUrl,
                      long durationSec, String uploader, long watchedAt) {
+            this(url, title, thumbUrl, durationSec, uploader, watchedAt, "");
+        }
+
+        public Entry(String url, String title, String thumbUrl,
+                     long durationSec, String uploader, long watchedAt, String uploaderUrl) {
             this.url = url != null ? url : "";
             this.title = title != null ? title : "";
             this.thumbUrl = thumbUrl != null ? thumbUrl : "";
             this.durationSec = durationSec;
             this.uploader = uploader != null ? uploader : "";
             this.watchedAt = watchedAt;
+            this.uploaderUrl = uploaderUrl != null ? uploaderUrl : "";
         }
     }
 
     public static synchronized void push(Context ctx, String url, String title,
                                          String thumbUrl, long durationSec, String uploader) {
+        push(ctx, url, title, thumbUrl, durationSec, uploader, "");
+    }
+
+    public static synchronized void push(Context ctx, String url, String title,
+                                         String thumbUrl, long durationSec, String uploader,
+                                         String uploaderUrl) {
         if (url == null || url.isEmpty()) return;
         List<Entry> cur = list(ctx);
         List<Entry> next = new ArrayList<>();
-        next.add(new Entry(url, title, thumbUrl, durationSec, uploader, System.currentTimeMillis()));
+        next.add(new Entry(url, title, thumbUrl, durationSec, uploader,
+                System.currentTimeMillis(), uploaderUrl));
         for (Entry e : cur) {
             if (!e.url.equals(url)) next.add(e);
             if (next.size() >= MAX) break;
@@ -66,7 +80,8 @@ public final class WatchHistory {
                         o.optString("thumb", ""),
                         o.optLong("dur", -1),
                         o.optString("uploader", ""),
-                        o.optLong("at", 0)));
+                        o.optLong("at", 0),
+                        o.optString("uploaderUrl", "")));
             }
         } catch (Exception ignored) {
         }
@@ -99,6 +114,7 @@ public final class WatchHistory {
                 o.put("dur", e.durationSec);
                 o.put("uploader", e.uploader);
                 o.put("at", e.watchedAt);
+                o.put("uploaderUrl", e.uploaderUrl);
                 arr.put(o);
             }
             ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).apply();

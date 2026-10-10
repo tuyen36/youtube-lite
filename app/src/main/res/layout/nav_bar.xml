@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Muc 2 UI/UX: thanh dieu huong chung cho cac man hinh chinh.
+     Dung <include layout="@layout/nav_bar"/> o cuoi moi activity layout. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#1A1A1A"
+    android:orientation="horizontal"
+    android:padding="4dp">
+
+    <Button
+        android:id="@+id/nav_home"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:text="Trang chủ"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/nav_search"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="4dp"
+        android:text="Tìm kiếm"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/nav_history"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="4dp"
+        android:text="Đã xem"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/nav_settings"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="4dp"
+        android:text="Cài đặt"
+        android:textSize="12sp" />
+</LinearLayout>

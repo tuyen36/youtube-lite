@@ -67,6 +67,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private TextView titleView;
     private TextView metaView;
+    private TextView channelLinkView;
     private TextView relatedState;
     private LinearLayout relatedContainer;
     private Button relatedMoreBtn;
@@ -86,6 +87,8 @@ public class PlayerActivity extends AppCompatActivity {
     // next = video liên quan đầu (video đầu trong list liên quan).
     private final List<SearchActivity.VideoItem> playTrail = new ArrayList<>();
     private int trailIndex = -1;
+    // Muc 6 UI/UX: khoa xoay man hinh (nam xem khoi tu lat).
+    private boolean rotateLocked = false;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -98,6 +101,7 @@ public class PlayerActivity extends AppCompatActivity {
         ImageButton fullBtn = findViewById(R.id.fullscreen_btn);
         titleView = findViewById(R.id.player_title);
         metaView = findViewById(R.id.player_meta);
+        channelLinkView = findViewById(R.id.player_channel_link);
         relatedState = findViewById(R.id.player_related_state);
         relatedContainer = findViewById(R.id.player_related_container);
         relatedMoreBtn = findViewById(R.id.player_related_more_btn);
@@ -126,21 +130,32 @@ public class PlayerActivity extends AppCompatActivity {
                     vTitle,
                     getIntent().getStringExtra(EXTRA_VIDEO_THUMB),
                     getIntent().getLongExtra(EXTRA_VIDEO_DURATION, -1),
-                    vUploader);
+                    vUploader,
+                    vUploaderUrl != null ? vUploaderUrl : "");
         } catch (Exception ignored) {
         }
         // Hiện tiêu đề + kênh ngay (giống ảnh mẫu: tiêu đề 2-3 dòng + kênh • view • time).
-        // 2.7: bam ten kenh -> mo trang kenh (avatar + tab Video/Danh sach phat).
+        // Muc 1 UI/UX: nut "Xem kenh ›" rieng duoi ten kenh (de thay hon bam ten kenh).
         titleView.setText(vTitle != null && !vTitle.isEmpty() ? vTitle : "Đang phát...");
         String meta0 = vUploader != null && !vUploader.isEmpty() ? vUploader : "";
         metaView.setText(meta0);
         metaView.setVisibility(meta0.isEmpty() ? View.GONE : View.VISIBLE);
         final String channelName0 = vUploader;
-        metaView.setOnClickListener(v -> {
+        android.view.View.OnClickListener openChannel0 = v -> {
             if (vUploaderUrl != null && !vUploaderUrl.isEmpty()) {
                 ChannelActivity.open(this, vUploaderUrl, channelName0);
             }
-        });
+        };
+        metaView.setOnClickListener(openChannel0);
+        if (channelLinkView != null) {
+            if (vUploaderUrl != null && !vUploaderUrl.isEmpty()) {
+                channelLinkView.setVisibility(View.VISIBLE);
+                channelLinkView.setOnClickListener(openChannel0);
+            } else {
+                channelLinkView.setVisibility(View.GONE);
+                channelLinkView.setOnClickListener(null);
+            }
+        }
         if (url == null) {
             finish();
             return;
@@ -243,9 +258,45 @@ public class PlayerActivity extends AppCompatActivity {
         // Nút bánh răng: chọn chất lượng + full màn hình (góc phải, API 21).
         // 2.9: 2 nut an/hien theo controller (cham video thi cung hien, het
         // timeout thi cung an nhu nut next/previous), khong noi lien tuc.
+        // Muc 2 UI/UX: them nut Cai dat vao cum de khoi thoat ra man chinh.
         fullBtn.setOnClickListener(v -> toggleFullscreen());
         ImageButton qualityBtn = findViewById(R.id.quality_btn);
         qualityBtn.setOnClickListener(v -> showQualityDialog());
+        try {
+            ImageButton playerSettingsBtn = findViewById(R.id.player_settings_btn);
+            playerSettingsBtn.setOnClickListener(v -> {
+                try {
+                    startActivity(new android.content.Intent(this, SettingsActivity.class));
+                } catch (Exception ignored) {
+                }
+            });
+        } catch (Exception ignored) {
+        }
+        // Muc 6 UI/UX: nut khoa xoay (nam xem khoi tu lat man hinh).
+        try {
+            ImageButton rotateLockBtn = findViewById(R.id.rotate_lock_btn);
+            rotateLockBtn.setOnClickListener(v -> toggleRotateLock(rotateLockBtn));
+            updateRotateLockIcon(rotateLockBtn);
+        } catch (Exception ignored) {
+        }
+        // Muc 6 UI/UX: hien gio hen tat con lai + dem nguoc moi giay + an goi y sau 8s.
+        try {
+            updateSleepInfo();
+            startSleepTicker();
+        } catch (Exception ignored) {
+        }
+        try {
+            final View hint = findViewById(R.id.player_hint);
+            if (hint != null) {
+                hint.postDelayed(() -> {
+                    try {
+                        hint.setVisibility(View.GONE);
+                    } catch (Exception ignored) {
+                    }
+                }, 8000);
+            }
+        } catch (Exception ignored) {
+        }
         final View overlayBtns = findViewById(R.id.player_overlay_btns);
         try {
             playerView.setControllerVisibilityListener(
@@ -267,6 +318,27 @@ public class PlayerActivity extends AppCompatActivity {
             relatedShown += RELATED_PAGE;
             renderRelated();
         });
+        // Muc 6 UI/UX: keo gan het tu hien them video lien quan.
+        try {
+            final View scroll = findViewById(R.id.player_scroll);
+            if (scroll instanceof android.widget.ScrollView) {
+                ((android.widget.ScrollView) scroll).getViewTreeObserver()
+                        .addOnScrollChangedListener(() -> {
+                            try {
+                                android.widget.ScrollView sv = (android.widget.ScrollView) scroll;
+                                android.view.View child = sv.getChildAt(0);
+                                if (child == null) return;
+                                int diff = child.getBottom() - (sv.getHeight() + sv.getScrollY());
+                                if (diff <= 600 && relatedShown < relatedFull.size()) {
+                                    relatedShown += RELATED_PAGE;
+                                    renderRelated();
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        });
+            }
+        } catch (Exception ignored) {
+        }
         // Tải video liên quan của video đang xem.
         loadRelated(pageUrl != null ? pageUrl : url);
     }
@@ -376,6 +448,18 @@ public class PlayerActivity extends AppCompatActivity {
             } else {
                 thumb.setImageResource(android.R.color.darker_gray);
             }
+            // Muc 1 UI/UX: nut Xem kenh rieng trong tung dong video lien quan.
+            android.widget.TextView channelLink = row.findViewById(R.id.video_channel_link);
+            if (channelLink != null) {
+                if (item.uploaderUrl != null && !item.uploaderUrl.isEmpty()) {
+                    channelLink.setVisibility(View.VISIBLE);
+                    channelLink.setOnClickListener(v ->
+                            ChannelActivity.open(this, item.uploaderUrl, item.uploader));
+                } else {
+                    channelLink.setVisibility(View.GONE);
+                    channelLink.setOnClickListener(null);
+                }
+            }
             row.setOnClickListener(v -> switchToRelated(item));
             relatedContainer.addView(row);
         }
@@ -464,16 +548,28 @@ public class PlayerActivity extends AppCompatActivity {
                     metaView.setText(mm);
                     metaView.setVisibility(mm.isEmpty() ? View.GONE : View.VISIBLE);
                     // 2.7: doi video thi doi luon link kenh de bam ten kenh mo dung kenh.
+                    // Muc 1 UI/UX: dong bo nut "Xem kenh ›" rieng.
                     final String newChannelUrl = item.uploaderUrl;
                     final String newChannelName = item.uploader;
-                    metaView.setOnClickListener(v -> {
+                    android.view.View.OnClickListener openNewChannel = v -> {
                         if (newChannelUrl != null && !newChannelUrl.isEmpty()) {
                             ChannelActivity.open(this, newChannelUrl, newChannelName);
                         }
-                    });
+                    };
+                    metaView.setOnClickListener(openNewChannel);
+                    if (channelLinkView != null) {
+                        if (newChannelUrl != null && !newChannelUrl.isEmpty()) {
+                            channelLinkView.setVisibility(View.VISIBLE);
+                            channelLinkView.setOnClickListener(openNewChannel);
+                        } else {
+                            channelLinkView.setVisibility(View.GONE);
+                            channelLinkView.setOnClickListener(null);
+                        }
+                    }
                     try {
                         WatchHistory.push(this, item.videoId, item.title,
-                                item.thumbUrl, item.durationSec, item.uploader);
+                                item.thumbUrl, item.durationSec, item.uploader,
+                                newChannelUrl != null ? newChannelUrl : "");
                     } catch (Exception ignored) {
                     }
                     // 2.2: luu vi tri video cu truoc khi doi (mo lai tiep tuc dung cho).
@@ -672,6 +768,58 @@ public class PlayerActivity extends AppCompatActivity {
         // giu vi tri + trang thai phat -> khong seek/play lai de khoi load lai.
     }
 
+    // Muc 6 UI/UX: khoa xoay (nam xem khoi tu lat) + hien gio hen tat con lai.
+    private void toggleRotateLock(ImageButton btn) {
+        rotateLocked = !rotateLocked;
+        try {
+            if (rotateLocked) {
+                int cur = getResources().getConfiguration().orientation;
+                if (cur == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                } else {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                }
+            } else if (fullscreen) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            } else {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            }
+        } catch (Exception ignored) {
+        }
+        updateRotateLockIcon(btn);
+        try {
+            Toast.makeText(this, rotateLocked ? "Đã khóa xoay" : "Đã mở khóa xoay",
+                    Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void updateRotateLockIcon(ImageButton btn) {
+        if (btn == null) return;
+        try {
+            btn.setAlpha(rotateLocked ? 1f : 0.5f);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void updateSleepInfo() {
+        try {
+            TextView sleepInfo = findViewById(R.id.player_sleep_info);
+            if (sleepInfo == null) return;
+            int sleep = AppSettings.getSleepMinutes(this);
+            long leftMs = PlaybackService.getSleepLeftMs();
+            if (sleep > 0 && leftMs > 0) {
+                long m = leftMs / 60000;
+                long s = (leftMs % 60000) / 1000;
+                sleepInfo.setText("Hẹn tắt sau " + m + " phút " + s + " giây");
+                sleepInfo.setVisibility(View.VISIBLE);
+            } else {
+                sleepInfo.setVisibility(View.GONE);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     /** Ghi dấu video vào lịch phát trong màn hình (cho previous/next). */
     private void pushTrail(String videoPageUrl, String vTitle, String vThumb,
                            long vDur, String vUploader) {
@@ -743,6 +891,37 @@ public class PlayerActivity extends AppCompatActivity {
     private void stopPositionSaver() {
         try {
             if (saverHandler != null) saverHandler.removeCallbacks(saverTask);
+        } catch (Exception ignored) {
+        }
+    }
+
+    // Muc 6 UI/UX: dem nguoc gio hen tat moi giay o man phat.
+    private android.os.Handler sleepTickHandler;
+    private final Runnable sleepTickTask = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                updateSleepInfo();
+            } catch (Exception ignored) {
+            }
+            if (sleepTickHandler != null) sleepTickHandler.postDelayed(this, 1000);
+        }
+    };
+
+    private void startSleepTicker() {
+        try {
+            if (sleepTickHandler == null) {
+                sleepTickHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            }
+            sleepTickHandler.removeCallbacks(sleepTickTask);
+            sleepTickHandler.post(sleepTickTask);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void stopSleepTicker() {
+        try {
+            if (sleepTickHandler != null) sleepTickHandler.removeCallbacks(sleepTickTask);
         } catch (Exception ignored) {
         }
     }
@@ -920,8 +1099,13 @@ public class PlayerActivity extends AppCompatActivity {
         super.onResume();
         // 2.3: mo man hinh len KHONG seek nguoc (loi 2.2: tua ve cho tat man
         // trong khi nhac van chay nen -> dung hinh). Chi gan view + phat tiep.
+        // Muc 6 UI/UX: cap nhat gio hen tat con lai (vua doi o man Cai dat).
         try {
             if (player != null && playerView != null) playerView.setPlayer(player);
+        } catch (Exception ignored) {
+        }
+        try {
+            updateSleepInfo();
         } catch (Exception ignored) {
         }
         try {
@@ -986,6 +1170,7 @@ public class PlayerActivity extends AppCompatActivity {
             brightHandler = null;
         }
         stopPositionSaver();
+        stopSleepTicker();
         player = null;
     }
 

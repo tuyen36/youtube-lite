@@ -16,7 +16,7 @@
         <androidx.media3.ui.PlayerView
             android:id="@+id/player_view"
             android:layout_width="match_parent"
-            android:layout_height="220dp"
+            android:layout_height="260dp"
             app:show_buffering="when_playing"
             app:show_shuffle_button="false"
             app:surface_type="texture_view"
@@ -34,20 +34,40 @@
 
             <ImageButton
                 android:id="@+id/quality_btn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="#80000000"
                 android:src="@android:drawable/ic_menu_preferences"
                 android:contentDescription="Độ phân giải" />
 
             <ImageButton
                 android:id="@+id/fullscreen_btn"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginLeft="8dp"
                 android:background="#80000000"
                 android:src="@android:drawable/ic_menu_crop"
                 android:contentDescription="Toàn màn hình" />
+
+            <!-- Muc 2 UI/UX: vao Cai dat ngay tu man phat -->
+            <!-- Muc 6 UI/UX: nut 48dp de bam + nut khoa xoay -->
+            <ImageButton
+                android:id="@+id/player_settings_btn"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginLeft="8dp"
+                android:background="#80000000"
+                android:src="@android:drawable/ic_menu_manage"
+                android:contentDescription="Cài đặt" />
+
+            <ImageButton
+                android:id="@+id/rotate_lock_btn"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginLeft="8dp"
+                android:background="#80000000"
+                android:src="@android:drawable/ic_lock_idle_lock"
+                android:contentDescription="Khóa xoay" />
         </LinearLayout>
 
     </FrameLayout>
@@ -71,7 +91,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="#FFF"
-                android:textSize="15sp"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:maxLines="3"
                 android:ellipsize="end" />
@@ -81,10 +101,42 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:textColor="#AAA"
-                android:textSize="12sp"
+                android:textColor="#CCC"
+                android:textSize="13sp"
                 android:maxLines="2"
                 android:ellipsize="end" />
+
+            <!-- Muc 1 UI/UX: nut Xem kenh ro rang duoi ten kenh -->
+            <TextView
+                android:id="@+id/player_channel_link"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:padding="6dp"
+                android:text="Xem kênh ›"
+                android:textColor="#4FC3F7"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <!-- Muc 6 UI/UX: gio hen tat con lai + goi y cham video hien nut -->
+            <TextView
+                android:id="@+id/player_sleep_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#FFAB91"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/player_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Chạm vào video để hiện/ẩn nút điều khiển"
+                android:textColor="#888"
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/player_related_title"

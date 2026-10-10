@@ -69,4 +69,9 @@
 
     </ScrollView>
 
+    <!-- Muc 2 UI/UX: thanh dieu huong chung -->
+    <include
+        android:id="@+id/nav_bar_container"
+        layout="@layout/nav_bar" />
+
 </LinearLayout>

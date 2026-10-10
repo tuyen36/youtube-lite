@@ -1,8 +1,21 @@
 <resources>
-    <!-- Theme tối giản cho máy cũ, tương thích API 21+ (AppCompat). -->
-    <style name="Theme.YoutubeLite" parent="Theme.AppCompat.DayNight.DarkActionBar">
+    <!-- Muc 4 UI/UX: khoa theme toi co dinh (DayNight ban ngay nen trang + chu trang = chim).
+         Theme toi + dialog toi dong bo nen den #111 chu trang. API 21 OK. -->
+    <style name="Theme.YoutubeLite" parent="Theme.AppCompat.NoActionBar">
         <item name="colorPrimary">#CC0000</item>
         <item name="colorPrimaryDark">#990000</item>
         <item name="colorAccent">#CC0000</item>
+        <item name="android:windowBackground">#111111</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#CCCCCC</item>
+        <item name="alertDialogTheme">@style/Theme.YoutubeLite.Dialog</item>
+    </style>
+
+    <style name="Theme.YoutubeLite.Dialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorPrimary">#CC0000</item>
+        <item name="colorAccent">#CC0000</item>
+        <item name="android:windowBackground">#222222</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#CCCCCC</item>
     </style>
 </resources>

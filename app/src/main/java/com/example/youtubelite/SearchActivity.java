@@ -223,6 +223,8 @@ public class SearchActivity extends AppCompatActivity {
         });
 
         searchBtn.setOnClickListener(v -> doSearch(queryInput.getText().toString().trim()));
+        // Muc 2 UI/UX: thanh dieu huong chung duoi cung.
+        NavBar.bind(this);
     }
 
     @Override
@@ -231,44 +233,22 @@ public class SearchActivity extends AppCompatActivity {
         renderSearchHistory();
     }
 
-    /** Vẽ các từ khóa đã tìm: bấm để tìm lại, giữ lâu để xóa. */
+    /** Vẽ các từ khóa đã tìm: bấm để tìm lại, giữ lâu để xóa (chip tối, Muc 4 UI/UX). */
     private void renderSearchHistory() {
         android.view.View title = findViewById(R.id.search_history_title);
         android.view.View scroll = findViewById(R.id.search_history_scroll);
         android.widget.LinearLayout box = findViewById(R.id.search_history_container);
         if (title == null || scroll == null || box == null) return;
-        List<String> queries = SearchHistory.list(this);
-        box.removeAllViews();
-        if (queries.isEmpty()) {
-            title.setVisibility(android.view.View.GONE);
-            scroll.setVisibility(android.view.View.GONE);
-            return;
-        }
-        title.setVisibility(android.view.View.VISIBLE);
-        scroll.setVisibility(android.view.View.VISIBLE);
-        for (String q : queries) {
-            android.widget.Button b = new android.widget.Button(this);
-            b.setText(q);
-            b.setTextSize(12);
-            b.setAllCaps(false);
-            android.widget.LinearLayout.LayoutParams lp =
-                    new android.widget.LinearLayout.LayoutParams(
-                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.setMargins(0, 0, 12, 0);
-            b.setLayoutParams(lp);
-            b.setOnClickListener(v -> {
-                queryInput.setText(q);
-                doSearch(q);
-            });
-            b.setOnLongClickListener(v -> {
-                SearchHistory.remove(this, q);
-                renderSearchHistory();
-                Toast.makeText(this, "Đã xóa: " + q, Toast.LENGTH_SHORT).show();
-                return true;
-            });
-            box.addView(b);
-        }
+        ChipHelper.renderHistoryChips(this, box, title, scroll,
+                q -> {
+                    queryInput.setText(q);
+                    doSearch(q);
+                },
+                q -> {
+                    SearchHistory.remove(this, q);
+                    renderSearchHistory();
+                    ChipHelper.toastDeleted(this, q);
+                });
     }
 
     private void doSearch(String q) {
@@ -279,9 +259,12 @@ public class SearchActivity extends AppCompatActivity {
         // 2.8: luu tu khoa + ve lai lich su de bam lai lan sau.
         SearchHistory.push(this, q);
         renderSearchHistory();
+        // Muc 5 UI/UX: vong xoay khi tai, loi co nut Thu lai.
+        StateHelper.showLoading(this);
+        final String fq = q;
         // Tìm thật bằng NewPipeExtractor trên luồng nền (cấm chạy mạng trên UI thread).
         Toast.makeText(this, "Đang tìm: " + q, Toast.LENGTH_SHORT).show();
-        currentQuery = q;
+        currentQuery = fq;
         nextPage = null;
         searchExtractor = null;
         new Thread(() -> {
@@ -290,7 +273,7 @@ public class SearchActivity extends AppCompatActivity {
                 org.schabi.newpipe.extractor.StreamingService yt =
                         org.schabi.newpipe.extractor.NewPipe.getService(0); // 0 = YouTube
                 org.schabi.newpipe.extractor.search.SearchExtractor extractor =
-                        yt.getSearchExtractor(q);
+                        yt.getSearchExtractor(fq);
                 extractor.fetchPage();
                 org.schabi.newpipe.extractor.search.SearchInfo info =
                         org.schabi.newpipe.extractor.search.SearchInfo.getInfo(extractor);
@@ -303,18 +286,33 @@ public class SearchActivity extends AppCompatActivity {
                 }
                 List<VideoItem> found = itemsFromInfo(info);
                 runOnUiThread(() -> {
+                    StateHelper.showContent(this);
                     items.clear();
                     items.addAll(found);
                     adapter.notifyDataSetChanged();
                     if (found.isEmpty()) {
-                        Toast.makeText(this, "Không tìm thấy video nào, thử từ khóa khác", Toast.LENGTH_LONG).show();
+                        final String fq2 = currentQuery;
+                        StateHelper.showError(this,
+                                "Không tìm thấy video nào, thử từ khóa khác",
+                                () -> {
+                                    if (fq2 != null && !fq2.isEmpty()) {
+                                        queryInput.setText(fq2);
+                                        doSearch(fq2);
+                                    }
+                                });
                     } else if (nextPage != null) {
                         Toast.makeText(this, "Kéo xuống để tải thêm", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this,
-                        "Tìm kiếm lỗi: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                final String msg = "Tìm kiếm lỗi: " + e.getMessage();
+                final String fq3 = currentQuery;
+                runOnUiThread(() -> StateHelper.showError(this, msg, () -> {
+                    if (fq3 != null && !fq3.isEmpty()) {
+                        queryInput.setText(fq3);
+                        doSearch(fq3);
+                    }
+                }));
             }
         }).start();
     }

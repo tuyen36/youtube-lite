@@ -44,6 +44,7 @@ public class VideoAdapter extends BaseAdapter {
         TextView title;
         TextView meta;
         TextView duration;
+        TextView channelLink;
     }
 
     @Override
@@ -56,6 +57,7 @@ public class VideoAdapter extends BaseAdapter {
             h.title = convertView.findViewById(R.id.video_title);
             h.meta = convertView.findViewById(R.id.video_meta);
             h.duration = convertView.findViewById(R.id.video_duration);
+            h.channelLink = convertView.findViewById(R.id.video_channel_link);
             convertView.setTag(h);
         } else {
             h = (Holder) convertView.getTag();
@@ -78,6 +80,17 @@ public class VideoAdapter extends BaseAdapter {
             Glide.with(ctx).load(item.thumbUrl).centerCrop().into(h.thumb);
         } else {
             h.thumb.setImageResource(android.R.color.darker_gray);
+        }
+        // Muc 1 UI/UX: nut Xem kenh rieng trong tung dong (de thay hon giu lau).
+        if (h.channelLink != null) {
+            if (item.uploaderUrl != null && !item.uploaderUrl.isEmpty()) {
+                h.channelLink.setVisibility(View.VISIBLE);
+                h.channelLink.setOnClickListener(v ->
+                        ChannelActivity.open(ctx, item.uploaderUrl, item.uploader));
+            } else {
+                h.channelLink.setVisibility(View.GONE);
+                h.channelLink.setOnClickListener(null);
+            }
         }
         return convertView;
     }

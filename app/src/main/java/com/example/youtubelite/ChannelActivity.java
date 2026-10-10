@@ -128,9 +128,45 @@ public class ChannelActivity extends AppCompatActivity {
 
     private void updateTabStyle() {
         try {
-            tabHomeBtn.setEnabled(currentTab != 0);
-            tabVideosBtn.setEnabled(currentTab != 1);
-            tabPlaylistsBtn.setEnabled(currentTab != 2);
+            paintTab(tabHomeBtn, currentTab == 0);
+            paintTab(tabVideosBtn, currentTab == 1);
+            paintTab(tabPlaylistsBtn, currentTab == 2);
+        } catch (Exception ignored) {
+        }
+        refreshTabLabels();
+    }
+
+    /** Muc 3 UI/UX: tab dang chon nen do chu trang, tab nghi nen xam. */
+    private static void paintTab(Button b, boolean selected) {
+        if (b == null) return;
+        try {
+            b.setEnabled(!selected);
+            if (selected) {
+                b.setBackgroundColor(0xFFCC0000);
+                b.setTextColor(0xFFFFFFFF);
+            } else {
+                b.setBackgroundColor(0xFF333333);
+                b.setTextColor(0xFFCCCCCC);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Muc 3 UI/UX: ten tab kem so luong (Video (40), Danh sach phat (5)). */
+    private void refreshTabLabels() {
+        try {
+            tabHomeBtn.setText(homeRows.isEmpty() ? "Trang chủ"
+                    : "Trang chủ (" + homeRows.size() + ")");
+        } catch (Exception ignored) {
+        }
+        try {
+            tabVideosBtn.setText(videoRows.isEmpty() ? "Video"
+                    : "Video (" + videoRows.size() + ")");
+        } catch (Exception ignored) {
+        }
+        try {
+            tabPlaylistsBtn.setText(playlistRows.isEmpty() ? "Danh sách phát"
+                    : "Danh sách (" + playlistRows.size() + ")");
         } catch (Exception ignored) {
         }
     }
@@ -277,6 +313,7 @@ public class ChannelActivity extends AppCompatActivity {
                     nextVideoPage = fNext;
                     nextVideoHandler = fH;
                     shown = PAGE;
+                    updateTabStyle();
                     if (currentTab == 1) renderCurrent();
                     stateView.setVisibility(fGot.isEmpty() ? View.VISIBLE : View.GONE);
                     if (fGot.isEmpty()) stateView.setText("Kênh chưa có video");
@@ -332,6 +369,7 @@ public class ChannelActivity extends AppCompatActivity {
                     nextPlaylistPage = fNext;
                     nextPlaylistHandler = fH;
                     shown = PAGE;
+                    updateTabStyle();
                     if (currentTab == 2) renderCurrent();
                     stateView.setVisibility(fGot.isEmpty() ? View.VISIBLE : View.GONE);
                     if (fGot.isEmpty()) stateView.setText("Kênh chưa có danh sách phát");
@@ -404,6 +442,8 @@ public class ChannelActivity extends AppCompatActivity {
                     else if (currentTab == 2) nextPlaylistPage = fFollowing;
                     else nextHomePage = fFollowing;
                     renderCurrent();
+                    // Muc 3 UI/UX: cap nhat so luong tren tab khi tai them.
+                    updateTabStyle();
                     stateView.setVisibility(View.GONE);
                 });
             } catch (Exception e) {
