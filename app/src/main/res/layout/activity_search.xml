@@ -18,6 +18,8 @@
             android:layout_weight="1"
             android:hint="Tìm kiếm YouTube..."
             android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:singleLine="true"
             android:maxLines="1"
             android:textColor="#FFF"
             android:textColorHint="#888" />
@@ -28,6 +30,31 @@
             android:layout_height="wrap_content"
             android:text="Tìm" />
     </LinearLayout>
+
+    <!-- Lich su tu khoa da tim: bam de tim lai, giu de xoa -->
+    <TextView
+        android:id="@+id/search_history_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Đã tìm kiếm"
+        android:textColor="#AAA"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <HorizontalScrollView
+        android:id="@+id/search_history_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/search_history_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
 
     <ListView
         android:id="@+id/result_list"

@@ -83,6 +83,19 @@ public class SearchActivity extends AppCompatActivity {
             }
             return true;
         });
+        // 2.8: Enter trên bàn phím điện thoại để tìm (không cần bấm nút Tìm).
+        queryInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+                    || actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                    || actionId == android.view.inputmethod.EditorInfo.IME_ACTION_GO
+                    || (event != null
+                        && event.getAction() == android.view.KeyEvent.ACTION_DOWN
+                        && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER)) {
+                doSearch(queryInput.getText().toString().trim());
+                return true;
+            }
+            return false;
+        });
         // Mở từ màn hình chính (HomeActivity) có kèm từ khóa -> tìm luôn.
         String startQuery = getIntent().getStringExtra(EXTRA_QUERY);
         if (startQuery != null && !startQuery.trim().isEmpty()) {
@@ -193,11 +206,60 @@ public class SearchActivity extends AppCompatActivity {
         searchBtn.setOnClickListener(v -> doSearch(queryInput.getText().toString().trim()));
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        renderSearchHistory();
+    }
+
+    /** Vẽ các từ khóa đã tìm: bấm để tìm lại, giữ lâu để xóa. */
+    private void renderSearchHistory() {
+        android.view.View title = findViewById(R.id.search_history_title);
+        android.view.View scroll = findViewById(R.id.search_history_scroll);
+        android.widget.LinearLayout box = findViewById(R.id.search_history_container);
+        if (title == null || scroll == null || box == null) return;
+        List<String> queries = SearchHistory.list(this);
+        box.removeAllViews();
+        if (queries.isEmpty()) {
+            title.setVisibility(android.view.View.GONE);
+            scroll.setVisibility(android.view.View.GONE);
+            return;
+        }
+        title.setVisibility(android.view.View.VISIBLE);
+        scroll.setVisibility(android.view.View.VISIBLE);
+        for (String q : queries) {
+            android.widget.Button b = new android.widget.Button(this);
+            b.setText(q);
+            b.setTextSize(12);
+            b.setAllCaps(false);
+            android.widget.LinearLayout.LayoutParams lp =
+                    new android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 12, 0);
+            b.setLayoutParams(lp);
+            b.setOnClickListener(v -> {
+                queryInput.setText(q);
+                doSearch(q);
+            });
+            b.setOnLongClickListener(v -> {
+                SearchHistory.remove(this, q);
+                renderSearchHistory();
+                Toast.makeText(this, "Đã xóa: " + q, Toast.LENGTH_SHORT).show();
+                return true;
+            });
+            box.addView(b);
+        }
+    }
+
     private void doSearch(String q) {
         if (q.isEmpty()) {
             Toast.makeText(this, "Nhập từ khóa tìm kiếm", Toast.LENGTH_SHORT).show();
             return;
         }
+        // 2.8: luu tu khoa + ve lai lich su de bam lai lan sau.
+        SearchHistory.push(this, q);
+        renderSearchHistory();
         // Tìm thật bằng NewPipeExtractor trên luồng nền (cấm chạy mạng trên UI thread).
         Toast.makeText(this, "Đang tìm: " + q, Toast.LENGTH_SHORT).show();
         currentQuery = q;
