@@ -52,6 +52,7 @@ public class PlayerActivity extends AppCompatActivity {
     public static final String EXTRA_VIDEO_THUMB = "video_thumb";
     public static final String EXTRA_VIDEO_DURATION = "video_duration";
     public static final String EXTRA_VIDEO_UPLOADER = "video_uploader";
+    public static final String EXTRA_UPLOADER_URL = "uploader_url";
 
     private ExoPlayer player;
     private PlayerView playerView;
@@ -114,6 +115,7 @@ public class PlayerActivity extends AppCompatActivity {
         pageUrl = getIntent().getStringExtra("video_page_url");
         String vTitle = getIntent().getStringExtra(EXTRA_VIDEO_TITLE);
         String vUploader = getIntent().getStringExtra(EXTRA_VIDEO_UPLOADER);
+        final String vUploaderUrl = getIntent().getStringExtra(EXTRA_UPLOADER_URL);
         // Ghi lịch sử xem (để màn hình chính gợi ý video tương tự lần sau).
         try {
             WatchHistory.push(this,
@@ -125,10 +127,17 @@ public class PlayerActivity extends AppCompatActivity {
         } catch (Exception ignored) {
         }
         // Hiện tiêu đề + kênh ngay (giống ảnh mẫu: tiêu đề 2-3 dòng + kênh • view • time).
+        // 2.7: bam ten kenh -> mo trang kenh (avatar + tab Video/Danh sach phat).
         titleView.setText(vTitle != null && !vTitle.isEmpty() ? vTitle : "Đang phát...");
         String meta0 = vUploader != null && !vUploader.isEmpty() ? vUploader : "";
         metaView.setText(meta0);
         metaView.setVisibility(meta0.isEmpty() ? View.GONE : View.VISIBLE);
+        final String channelName0 = vUploader;
+        metaView.setOnClickListener(v -> {
+            if (vUploaderUrl != null && !vUploaderUrl.isEmpty()) {
+                ChannelActivity.open(this, vUploaderUrl, channelName0);
+            }
+        });
         if (url == null) {
             finish();
             return;
@@ -367,6 +376,12 @@ public class PlayerActivity extends AppCompatActivity {
                 } catch (Exception ignored) {
                     bestAudio = null;
                 }
+                // 2.7: giu link kenh de bam ten kenh tren man phat mo dung kenh.
+                try {
+                    String cu = detail.getUploaderUrl();
+                    if (cu != null && !cu.isEmpty()) item.uploaderUrl = cu;
+                } catch (Exception ignored) {
+                }
                 List<QualityPolicy.Stream> rawProg = new ArrayList<>();
                 for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
                     rawProg.add(SearchActivity.mapVideoStream(vs));
@@ -414,6 +429,14 @@ public class PlayerActivity extends AppCompatActivity {
                     String mm = item.uploader != null ? item.uploader : "";
                     metaView.setText(mm);
                     metaView.setVisibility(mm.isEmpty() ? View.GONE : View.VISIBLE);
+                    // 2.7: doi video thi doi luon link kenh de bam ten kenh mo dung kenh.
+                    final String newChannelUrl = item.uploaderUrl;
+                    final String newChannelName = item.uploader;
+                    metaView.setOnClickListener(v -> {
+                        if (newChannelUrl != null && !newChannelUrl.isEmpty()) {
+                            ChannelActivity.open(this, newChannelUrl, newChannelName);
+                        }
+                    });
                     try {
                         WatchHistory.push(this, item.videoId, item.title,
                                 item.thumbUrl, item.durationSec, item.uploader);

@@ -184,8 +184,14 @@ public class HistoryActivity extends AppCompatActivity {
                     }
                     // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
                     int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
+                    String channelUrl = "";
+                    try {
+                        channelUrl = detail.getUploaderUrl();
+                    } catch (Exception ignored) {
+                    }
                     SearchActivity.VideoItem item = new SearchActivity.VideoItem(
-                            e.url, e.title, new ArrayList<>(), e.thumbUrl, e.durationSec, e.uploader);
+                            e.url, e.title, new ArrayList<>(), e.thumbUrl, e.durationSec,
+                            e.uploader, "", channelUrl != null ? channelUrl : "");
                     int h0 = 360;
                     try {
                         String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");

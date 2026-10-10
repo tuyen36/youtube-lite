@@ -248,6 +248,12 @@ public class HomeActivity extends AppCompatActivity {
                     }
                     // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
                     int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
+                    // 2.7: giu link kenh de man phat bam ten kenh mo trang kenh.
+                    try {
+                        String cu = detail.getUploaderUrl();
+                        if (cu != null && !cu.isEmpty()) item.uploaderUrl = cu;
+                    } catch (Exception ignored) {
+                    }
                     // Mở player dùng chung openPlayer của SearchActivity
                     // (tự ghi lịch sử xem + đủ audio/độ phân giải).
                     int h0 = 360;

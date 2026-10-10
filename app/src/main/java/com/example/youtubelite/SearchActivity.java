@@ -55,6 +55,7 @@ public class SearchActivity extends AppCompatActivity {
         i.putExtra(PlayerActivity.EXTRA_VIDEO_THUMB, item.thumbUrl);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_DURATION, item.durationSec);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_UPLOADER, item.uploader);
+        i.putExtra(PlayerActivity.EXTRA_UPLOADER_URL, item.uploaderUrl);
         if (!(ctx instanceof android.app.Activity)) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(i);
     }
@@ -70,6 +71,18 @@ public class SearchActivity extends AppCompatActivity {
 
         adapter = new VideoAdapter(this, items);
         resultList.setAdapter(adapter);
+        // Giu lau 1 video -> mo trang kenh cua video do (avatar + tab Video/Playlist).
+        resultList.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= items.size()) return true;
+            VideoItem it = items.get(position);
+            if (it.uploaderUrl != null && !it.uploaderUrl.isEmpty()) {
+                ChannelActivity.open(this, it.uploaderUrl, it.uploader);
+            } else {
+                Toast.makeText(this, "Video này chưa có link kênh",
+                        Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        });
         // Mở từ màn hình chính (HomeActivity) có kèm từ khóa -> tìm luôn.
         String startQuery = getIntent().getStringExtra(EXTRA_QUERY);
         if (startQuery != null && !startQuery.trim().isEmpty()) {
@@ -98,6 +111,12 @@ public class SearchActivity extends AppCompatActivity {
                         bestAudio = null;
                     }
                     // 1) progressive (có sẵn tiếng) — ưu tiên vì máy yếu phát nhẹ nhất.
+                    // 2.7: giu link kenh de man phat bam ten kenh mo trang kenh.
+                    try {
+                        String cu = detail.getUploaderUrl();
+                        if (cu != null && !cu.isEmpty()) item.uploaderUrl = cu;
+                    } catch (Exception ignored) {
+                    }
                     List<QualityPolicy.Stream> rawProg = new ArrayList<>();
                     for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
                         rawProg.add(mapVideoStream(vs));
@@ -287,6 +306,12 @@ public class SearchActivity extends AppCompatActivity {
         } catch (Exception ignored) {
             uploader = "";
         }
+        String uploaderUrl = "";
+        try {
+            uploaderUrl = s.getUploaderUrl() != null ? s.getUploaderUrl() : "";
+        } catch (Exception ignored) {
+            uploaderUrl = "";
+        }
         // Ngày đăng (vd "3 ngày trước", "1 tháng trước").
         String uploadDate = "";
         try {
@@ -295,7 +320,7 @@ public class SearchActivity extends AppCompatActivity {
         } catch (Exception ignored) {
             uploadDate = "";
         }
-        return new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader, uploadDate);
+        return new VideoItem(url, title, new ArrayList<>(), thumb, dur, uploader, uploadDate, uploaderUrl);
     }
 
     private static List<VideoItem> itemsFromInfo(
@@ -356,18 +381,25 @@ public class SearchActivity extends AppCompatActivity {
         public long durationSec;
         public String uploader;
         public String uploadDate; // vd "3 ngày trước", "1 tháng trước"
+        public String uploaderUrl; // link kenh de mo trang kenh
 
         public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams) {
-            this(videoId, title, streams, "", -1, "", "");
+            this(videoId, title, streams, "", -1, "", "", "");
         }
 
         public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams,
                          String thumbUrl, long durationSec, String uploader) {
-            this(videoId, title, streams, thumbUrl, durationSec, uploader, "");
+            this(videoId, title, streams, thumbUrl, durationSec, uploader, "", "");
         }
 
         public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams,
                          String thumbUrl, long durationSec, String uploader, String uploadDate) {
+            this(videoId, title, streams, thumbUrl, durationSec, uploader, uploadDate, "");
+        }
+
+        public VideoItem(String videoId, String title, List<QualityPolicy.Stream> streams,
+                         String thumbUrl, long durationSec, String uploader, String uploadDate,
+                         String uploaderUrl) {
             this.videoId = videoId;
             this.title = title;
             this.streams = streams;
@@ -375,6 +407,7 @@ public class SearchActivity extends AppCompatActivity {
             this.durationSec = durationSec;
             this.uploader = uploader != null ? uploader : "";
             this.uploadDate = uploadDate != null ? uploadDate : "";
+            this.uploaderUrl = uploaderUrl != null ? uploaderUrl : "";
         }
 
         public String durationLabel() {
