@@ -195,6 +195,8 @@ public class ChannelActivity extends AppCompatActivity {
                 } catch (Exception ignored) {
                 }
                 final List<RowItem> fHome = home;
+                final org.schabi.newpipe.extractor.Page fHomeNext = homeNext;
+                final org.schabi.newpipe.extractor.linkhandler.ListLinkHandler fHomeHandler = homeHandler;
                 runOnUiThread(() -> {
                     if (fName != null && !fName.isEmpty()) nameView.setText(fName);
                     subsView.setText(subsLine(fSubs));
@@ -210,8 +212,8 @@ public class ChannelActivity extends AppCompatActivity {
                     }
                     homeRows.clear();
                     homeRows.addAll(fHome);
-                    nextHomePage = homeNext;
-                    nextHomeHandler = homeHandler;
+                    nextHomePage = fHomeNext;
+                    nextHomeHandler = fHomeHandler;
                     // Mac dinh mo tab Trang chu.
                     currentTab = 0;
                     shown = PAGE;
@@ -265,14 +267,15 @@ public class ChannelActivity extends AppCompatActivity {
                         next = tab.getNextPage();
                     } catch (Exception ignored) {
                     }
-                    nextVideoHandler = h;
                 }
                 final List<RowItem> fGot = got;
                 final org.schabi.newpipe.extractor.Page fNext = next;
+                final org.schabi.newpipe.extractor.linkhandler.ListLinkHandler fH = h;
                 runOnUiThread(() -> {
                     videoRows.clear();
                     videoRows.addAll(fGot);
                     nextVideoPage = fNext;
+                    nextVideoHandler = fH;
                     shown = PAGE;
                     if (currentTab == 1) renderCurrent();
                     stateView.setVisibility(fGot.isEmpty() ? View.VISIBLE : View.GONE);
@@ -319,14 +322,15 @@ public class ChannelActivity extends AppCompatActivity {
                         next = tab.getNextPage();
                     } catch (Exception ignored) {
                     }
-                    nextPlaylistHandler = h;
                 }
                 final List<RowItem> fGot = got;
                 final org.schabi.newpipe.extractor.Page fNext = next;
+                final org.schabi.newpipe.extractor.linkhandler.ListLinkHandler fH = h;
                 runOnUiThread(() -> {
                     playlistRows.clear();
                     playlistRows.addAll(fGot);
                     nextPlaylistPage = fNext;
+                    nextPlaylistHandler = fH;
                     shown = PAGE;
                     if (currentTab == 2) renderCurrent();
                     stateView.setVisibility(fGot.isEmpty() ? View.VISIBLE : View.GONE);
