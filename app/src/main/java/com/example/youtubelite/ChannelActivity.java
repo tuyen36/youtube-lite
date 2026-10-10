@@ -594,8 +594,9 @@ public class ChannelActivity extends AppCompatActivity {
                                 Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
-                    int h0 = 360;
+                    // 2.9: muc mac dinh lay tu Cai dat (thieu luong cao ve 480p).
+                    int defIdx = PlayerActivity.pickDefaultIndex(this, allLabels);
+                    int h0 = AppSettings.getDefaultHeight(this);
                     try {
                         String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
                         if (d.length() > 4) d = d.substring(0, 4);

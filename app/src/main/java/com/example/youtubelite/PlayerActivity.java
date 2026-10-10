@@ -234,9 +234,27 @@ public class PlayerActivity extends AppCompatActivity {
         startPlaybackService(vTitle);
 
         // Nút bánh răng: chọn chất lượng + full màn hình (góc phải, API 21).
+        // 2.9: 2 nut an/hien theo controller (cham video thi cung hien, het
+        // timeout thi cung an nhu nut next/previous), khong noi lien tuc.
         fullBtn.setOnClickListener(v -> toggleFullscreen());
         ImageButton qualityBtn = findViewById(R.id.quality_btn);
         qualityBtn.setOnClickListener(v -> showQualityDialog());
+        final View overlayBtns = findViewById(R.id.player_overlay_btns);
+        try {
+            playerView.setControllerVisibilityListener(
+                    new androidx.media3.ui.PlayerView.ControllerVisibilityListener() {
+                        @Override
+                        public void onVisibilityChanged(int visibility) {
+                            try {
+                                if (overlayBtns != null) {
+                                    overlayBtns.setVisibility(visibility);
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    });
+        } catch (Exception ignored) {
+        }
 
         relatedMoreBtn.setOnClickListener(v -> {
             relatedShown += RELATED_PAGE;
@@ -415,7 +433,8 @@ public class PlayerActivity extends AppCompatActivity {
                         Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    int defIdx = pickDefaultIndex(labels);
+                    // 2.9: muc mac dinh lay tu Cai dat (thieu luong cao ve 480p).
+                    int defIdx = pickDefaultIndex(this, labels);
                     // Đổi video ngay trong màn hình này: tiêu đề + meta + related mới.
                     allUrls = urls;
                     allLabels = labels;
@@ -801,19 +820,19 @@ public class PlayerActivity extends AppCompatActivity {
         // tự chọn trong trần 1080p/30fps đã đặt ở onCreate.
     }
 
-    /** Chon mac dinh cho K016: 360p co tieng truoc, roi 360p, roi 480p. */
+    /** Chon mac dinh theo Cai dat (2.9): muc da chon, thieu luong cao ve 480p.
+     * Giu ham cu de khong vo cac man hinh khac. */
     static int pickDefaultIndex(List<String> labels) {
-        for (int k = 0; k < labels.size(); k++) {
-            if (labels.get(k).startsWith("360p")
-                    && labels.get(k).indexOf(0x266A) >= 0) return k;
+        return AppSettings.pickIndex(labels, 360);
+    }
+
+    static int pickDefaultIndex(android.content.Context ctx, List<String> labels) {
+        int want = 360;
+        try {
+            want = AppSettings.getDefaultHeight(ctx);
+        } catch (Exception ignored) {
         }
-        for (int k = 0; k < labels.size(); k++) {
-            if (labels.get(k).startsWith("360p")) return k;
-        }
-        for (int k = 0; k < labels.size(); k++) {
-            if (labels.get(k).startsWith("480p")) return k;
-        }
-        return 0;
+        return AppSettings.pickIndex(labels, want);
     }
 
     @Override

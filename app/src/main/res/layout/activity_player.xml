@@ -22,8 +22,10 @@
             app:surface_type="texture_view"
             app:resize_mode="fit" />
 
-        <!-- Nút chọn độ phân giải + full màn hình (góc phải, tương thích API 21) -->
+        <!-- 2.9: cum nut chat luong + fullscreen an/hien theo controller
+             (cham video thi cung hien, het timeout thi cung an). -->
         <LinearLayout
+            android:id="@+id/player_overlay_btns"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"

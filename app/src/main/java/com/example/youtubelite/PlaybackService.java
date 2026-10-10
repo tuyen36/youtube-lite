@@ -24,6 +24,7 @@ public class PlaybackService extends Service {
     private static final int NOTIF_ID = 1001;
     private static final String CHANNEL_ID = "playback";
     public static final String EXTRA_TITLE = "title";
+    public static final String EXTRA_SLEEP_MINUTES = "sleep_minutes";
 
     private static ExoPlayer sharedPlayer;
     private static String lastTitle = "";
@@ -81,6 +82,17 @@ public class PlaybackService extends Service {
                     getSharedPreferences("playback", MODE_PRIVATE)
                             .edit().putString("last_title", t).apply();
                 } catch (Exception ignored) {
+                }
+            }
+            // 2.9: man Cai dat doi hen gio -> dat/huy dem gio that.
+            if (intent.hasExtra(EXTRA_SLEEP_MINUTES)) {
+                int m = intent.getIntExtra(EXTRA_SLEEP_MINUTES, -1);
+                if (m >= 0) {
+                    try {
+                        AppSettings.setSleepMinutes(this, m);
+                    } catch (Exception ignored) {
+                    }
+                    scheduleSleep(m);
                 }
             }
         }
@@ -159,6 +171,52 @@ public class PlaybackService extends Service {
             if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
         } catch (Exception ignored) {
         }
+    }
+
+    // 2.9: hen gio tat phat (dem trong service de tat man van dung gio).
+    private static long sleepDeadlineMs = 0;
+    private android.os.Handler sleepHandler;
+    private final Runnable sleepTask = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (sharedPlayer != null) sharedPlayer.pause();
+            } catch (Exception ignored) {
+            }
+            try {
+                stopSelf();
+            } catch (Exception ignored) {
+            }
+            sleepDeadlineMs = 0;
+        }
+    };
+
+    private void scheduleSleep(int minutes) {
+        try {
+            if (sleepHandler == null) {
+                sleepHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            }
+            sleepHandler.removeCallbacks(sleepTask);
+            if (minutes <= 0) {
+                sleepDeadlineMs = 0;
+                return;
+            }
+            sleepDeadlineMs = System.currentTimeMillis() + minutes * 60000L;
+            sleepHandler.postDelayed(sleepTask, minutes * 60000L);
+            // Doi thong bao de user biet dang hen gio.
+            try {
+                startForeground(NOTIF_ID, buildNotification(lastTitle));
+            } catch (Exception ignored) {
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Man Cai dat hien "con N phut" (0 = khong hen). */
+    public static long getSleepLeftMs() {
+        if (sleepDeadlineMs <= 0) return 0;
+        long left = sleepDeadlineMs - System.currentTimeMillis();
+        return left > 0 ? left : 0;
     }
 
     private Notification buildNotification(String title) {

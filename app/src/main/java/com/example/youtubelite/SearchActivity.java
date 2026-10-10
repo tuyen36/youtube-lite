@@ -166,11 +166,11 @@ public class SearchActivity extends AppCompatActivity {
                             Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                             return;
                         }
-                        // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
-                        int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
+                        // 2.9: muc mac dinh lay tu Cai dat (thieu luong cao ve 480p).
+                        int defIdx = PlayerActivity.pickDefaultIndex(this, allLabels);
                         String a0 = allAudios.get(defIdx);
                         // Lấy height từ label "720p" để hiện đúng.
-                        int h0 = 360;
+                        int h0 = AppSettings.getDefaultHeight(this);
                         try {
                             String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
                             if (d.length() > 4) d = d.substring(0, 4);

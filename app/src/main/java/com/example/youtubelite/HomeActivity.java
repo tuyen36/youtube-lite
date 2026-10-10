@@ -79,6 +79,15 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(i);
         });
 
+        // 2.9: nut Cai dat (hen gio tat + do phan giai mac dinh).
+        try {
+            Button settingsBtn = findViewById(R.id.home_settings_btn);
+            settingsBtn.setOnClickListener(v -> {
+                startActivity(new Intent(this, SettingsActivity.class));
+            });
+        } catch (Exception ignored) {
+        }
+
         suggestMoreBtn.setOnClickListener(v -> {
             suggestShown += PAGE;
             renderSuggest();
@@ -260,8 +269,8 @@ public class HomeActivity extends AppCompatActivity {
                         Toast.makeText(this, "Không có định dạng phù hợp máy này", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    // Mac dinh K016: 360p co tieng truoc, roi 360p, roi 480p.
-                    int defIdx = PlayerActivity.pickDefaultIndex(allLabels);
+                    // 2.9: muc mac dinh lay tu Cai dat (thieu luong cao ve 480p).
+                    int defIdx = PlayerActivity.pickDefaultIndex(this, allLabels);
                     // 2.7: giu link kenh de man phat bam ten kenh mo trang kenh.
                     try {
                         String cu = detail.getUploaderUrl();
@@ -270,7 +279,7 @@ public class HomeActivity extends AppCompatActivity {
                     }
                     // Mở player dùng chung openPlayer của SearchActivity
                     // (tự ghi lịch sử xem + đủ audio/độ phân giải).
-                    int h0 = 360;
+                    int h0 = AppSettings.getDefaultHeight(this);
                     try {
                         String d = allLabels.get(defIdx).replaceAll("[^0-9]", "");
                         if (d.length() > 4) d = d.substring(0, 4);
