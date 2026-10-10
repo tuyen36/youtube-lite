@@ -196,7 +196,7 @@ public class SearchActivity extends AppCompatActivity {
                         } catch (Exception ignored) {
                             h0 = 360;
                         }
-                        openPlayer(item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios,
+                        openPlayer(this, item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios,
                                 fDash);
                     });
                 } catch (Exception e) {
