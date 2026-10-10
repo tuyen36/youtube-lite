@@ -53,6 +53,7 @@ public class PlayerActivity extends AppCompatActivity {
     public static final String EXTRA_VIDEO_DURATION = "video_duration";
     public static final String EXTRA_VIDEO_UPLOADER = "video_uploader";
     public static final String EXTRA_UPLOADER_URL = "uploader_url";
+    public static final String EXTRA_DASH_URL = "dash_url";
 
     private ExoPlayer player;
     private PlayerView playerView;
@@ -61,6 +62,7 @@ public class PlayerActivity extends AppCompatActivity {
     private ArrayList<String> allLabels = new ArrayList<>();
     private ArrayList<String> allAudios = new ArrayList<>();
     private String audioUrl;
+    private String dashUrl;
     private int currentIndex = 0;
 
     private TextView titleView;
@@ -103,6 +105,7 @@ public class PlayerActivity extends AppCompatActivity {
         String url = getIntent().getStringExtra(EXTRA_VIDEO_URL);
         int height = getIntent().getIntExtra(EXTRA_VIDEO_HEIGHT, 480);
         audioUrl = getIntent().getStringExtra(EXTRA_AUDIO_URL);
+        dashUrl = getIntent().getStringExtra(EXTRA_DASH_URL);
         if (getIntent().getStringArrayListExtra(EXTRA_ALL_URLS) != null) {
             allUrls = getIntent().getStringArrayListExtra(EXTRA_ALL_URLS);
         }
@@ -404,6 +407,14 @@ public class PlayerActivity extends AppCompatActivity {
                     if (cu != null && !cu.isEmpty()) item.uploaderUrl = cu;
                 } catch (Exception ignored) {
                 }
+                // 2.11: link DASH thich ung cho 720p/1080p khi doi video trong man phat.
+                String dashMpdRel = "";
+                try {
+                    dashMpdRel = detail.getDashMpdUrl();
+                } catch (Exception ignored) {
+                    dashMpdRel = "";
+                }
+                final String fDashRel = dashMpdRel != null ? dashMpdRel : "";
                 List<QualityPolicy.Stream> rawProg = new ArrayList<>();
                 for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
                     rawProg.add(SearchActivity.mapVideoStream(vs));
@@ -473,6 +484,8 @@ public class PlayerActivity extends AppCompatActivity {
                         }
                     } catch (Exception ignored) {
                     }
+                    // 2.11: doi video thi doi luon link DASH de 720p/1080p phat thich ung.
+                    dashUrl = fDashRel;
                     playUrlAt(urls.get(defIdx), audios.get(defIdx), 0, true);
                     currentVideoUrl = urls.get(defIdx);
                     currentKey = savedPlaybackKey(currentVideoUrl);
@@ -496,9 +509,34 @@ public class PlayerActivity extends AppCompatActivity {
         playUrlAt(videoUrl, audio, 0, true);
     }
 
-    /** Phat tu vi tri cho truoc (mo lai video dang nghe do). API 21 OK. */
+    /** Phat tu vi tri cho truoc (mo lai video dang nghe do). API 21 OK.
+     * 2.11: muc >= 720p co DASH thi phat manifest thich ung (het khung nhu YouTube goc).
+     * Mang yeu tu ha xuong, mang khoe tu len lai. Muc thap giu progressive nhe cho K016. */
     private void playUrlAt(String videoUrl, @Nullable String audio, long startMs, boolean play) {
         if (videoUrl == null || player == null) return;
+        int h = currentHeight();
+        if (h >= 720 && dashUrl != null && !dashUrl.isEmpty()) {
+            try {
+                DefaultHttpDataSource.Factory http =
+                        new DefaultHttpDataSource.Factory()
+                                .setUserAgent("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
+                androidx.media3.exoplayer.dash.DashMediaSource dash =
+                        new androidx.media3.exoplayer.dash.DashMediaSource.Factory(http)
+                                .createMediaSource(MediaItem.fromUri(Uri.parse(dashUrl)));
+                player.setMediaSource(dash);
+                player.prepare();
+                if (startMs > 5000) {
+                    try {
+                        player.seekTo(startMs);
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (play) player.play();
+                return;
+            } catch (Exception ignored) {
+                // Rot DASH thi roi xuong cach cu ben duoi.
+            }
+        }
         DefaultHttpDataSource.Factory http =
                 new DefaultHttpDataSource.Factory()
                         .setUserAgent("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
@@ -534,6 +572,18 @@ public class PlayerActivity extends AppCompatActivity {
             if (url.equals(urls.get(i))) return i;
         }
         return -1;
+    }
+
+    /** Muc hien tai dang phat (de 2.11 biet khi nao dung DASH). */
+    private int currentHeight() {
+        try {
+            if (allLabels != null && currentIndex >= 0 && currentIndex < allLabels.size()) {
+                String lb = allLabels.get(currentIndex);
+                if (lb != null) return AppSettings.heightFromLabel(lb, 360);
+            }
+        } catch (Exception ignored) {
+        }
+        return 360;
     }
 
     private long readSavedPosition(String key) {

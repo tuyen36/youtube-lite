@@ -149,6 +149,14 @@ public class HistoryActivity extends AppCompatActivity {
                 } catch (Exception ignored) {
                     bestAudio = null;
                 }
+                // 2.11: link DASH thich ung cho 720p/1080p (het khung nhu YouTube goc).
+                String dashMpd = "";
+                try {
+                    dashMpd = detail.getDashMpdUrl();
+                } catch (Exception ignored) {
+                    dashMpd = "";
+                }
+                final String fDashHist = dashMpd != null ? dashMpd : "";
                 List<QualityPolicy.Stream> rawProg = new ArrayList<>();
                 for (org.schabi.newpipe.extractor.stream.VideoStream vs : detail.getVideoStreams()) {
                     rawProg.add(SearchActivity.mapVideoStream(vs));
@@ -202,7 +210,7 @@ public class HistoryActivity extends AppCompatActivity {
                     }
                     SearchActivity.openPlayer(this, item,
                             allUrls.get(defIdx), h0, allAudios.get(defIdx),
-                            allUrls, allLabels, allAudios);
+                            allUrls, allLabels, allAudios, fDashHist);
                 });
             } catch (Exception ex) {
                 runOnUiThread(() -> Toast.makeText(this,

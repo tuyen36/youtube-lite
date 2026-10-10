@@ -42,10 +42,20 @@ public class SearchActivity extends AppCompatActivity {
                            String videoUrl, int height, @Nullable String audioUrl,
                            ArrayList<String> allUrls, ArrayList<String> allLabels,
                            ArrayList<String> allAudios) {
+        openPlayer(ctx, item, videoUrl, height, audioUrl, allUrls, allLabels, allAudios, "");
+    }
+
+    static void openPlayer(android.content.Context ctx, SearchActivity.VideoItem item,
+                           String videoUrl, int height, @Nullable String audioUrl,
+                           ArrayList<String> allUrls, ArrayList<String> allLabels,
+                           ArrayList<String> allAudios, @Nullable String dashMpdUrl) {
         Intent i = new Intent(ctx, PlayerActivity.class);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_URL, videoUrl);
         i.putExtra(PlayerActivity.EXTRA_VIDEO_HEIGHT, height);
         if (audioUrl != null) i.putExtra(PlayerActivity.EXTRA_AUDIO_URL, audioUrl);
+        if (dashMpdUrl != null && !dashMpdUrl.isEmpty()) {
+            i.putExtra(PlayerActivity.EXTRA_DASH_URL, dashMpdUrl);
+        }
         i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_URLS, allUrls);
         i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_LABELS, allLabels);
         i.putStringArrayListExtra(PlayerActivity.EXTRA_ALL_AUDIOS, allAudios);
@@ -123,6 +133,14 @@ public class SearchActivity extends AppCompatActivity {
                     } catch (Exception ignored) {
                         bestAudio = null;
                     }
+                    // 2.11: link DASH thich ung cho 720p/1080p (het khung nhu YouTube goc).
+                    String dashMpd = "";
+                    try {
+                        dashMpd = detail.getDashMpdUrl();
+                    } catch (Exception ignored) {
+                        dashMpd = "";
+                    }
+                    final String fDash = dashMpd != null ? dashMpd : "";
                     // 1) progressive (có sẵn tiếng) — ưu tiên vì máy yếu phát nhẹ nhất.
                     // 2.7: giu link kenh de man phat bam ten kenh mo trang kenh.
                     try {
@@ -178,7 +196,8 @@ public class SearchActivity extends AppCompatActivity {
                         } catch (Exception ignored) {
                             h0 = 360;
                         }
-                        openPlayer(item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios);
+                        openPlayer(item, allUrls.get(defIdx), h0, a0, allUrls, allLabels, allAudios,
+                                fDash);
                     });
                 } catch (Exception e) {
                     runOnUiThread(() -> Toast.makeText(this,
